@@ -1,18 +1,23 @@
 from typing import TYPE_CHECKING
 from typing import Any, Optional
-from Events import EventReleaseVehicleFromLaneGroup
+from Events import EventReleaseVehicleFromLaneGroup, EventTransitToWaiting
 from queue import Queue
 from static import get_waiting_time
 
 if TYPE_CHECKING:
     from core import Link
-    from Signal import AbstractActuator
+    from Vehicle import Vehicle
+    from Signal import ActuatorSignal
     from SimpleClasses import RoadConnection, RoadParams
+    from Events import Dispatcher
 
 class VehicleQueue:
     queue:Queue
-    def __init__(self):
+    # lg:'LaneGroup'
+
+    def __init__(self,lg:'LaneGroup'):
         self.queue = Queue()
+        # self.lg = lg
 
     def clear(self) -> None:
         self.queue = Queue()
@@ -20,7 +25,11 @@ class VehicleQueue:
     def get_total_vehicles(self) -> int:
         return self.queue.qsize()
 
+    def add_vehicle(self,v:'Vehicle') -> None:
+        self.queue.put(v)
 
+    def remove_given_vehicle(self,timestamp:float, v:'Vehicle') -> None:
+        pass
 
 class LaneGroup:
 
@@ -36,19 +45,13 @@ class LaneGroup:
     transit_queue: VehicleQueue
     waiting_queue: VehicleQueue
 
-    # nominal parameters
-    nom_transit_time_sec : float
-    nom_saturation_flow_rate_vps : float
-
-    # applied (actuated) fd
     transit_time_sec : float
     saturation_flow_rate_vps : float
-
+    nom_saturation_flow_rate_vps : float
 
     # public StateContainer buffer;
 
-
-    # protected ActuatorLaneGroupCapacity actuator_capacity;
+    actuator_capacity : Optional['ActuatorSignal']
 
     # flow accumulator
     # protected FlowAccumulatorState flw_acc;
@@ -68,14 +71,13 @@ class LaneGroup:
     # lane changing
     # protected Map<State , Map<Maneuver,Double>> state2lanechangeprob; // state-> maneuver -> probability
 
-
-    def __init__(self,link:"Link",length:float , num_lanes:int , start_lane:int, rp:'RoadParams' , out_rcs:Optional[set['RoadConnection']] = None ) -> None:
+    def __init__(self,link:"Link",length:float , num_lanes:int , start_lane:int, rp:'RoadParams' , out_rcs:Optional[list['RoadConnection']] = None ) -> None:
 
         self.link = link
         self.length = length
         self.num_lanes = num_lanes
         # self.id = OTMUtils.get_lanegroup_id();
-        self.start_lane_dn = start_lane;
+        self.start_lane_dn = start_lane
         # self.state2roadconnection = dict()
         # self.state2lanechangeprob = dict()
         self.max_vehicles =  rp.jam_density * (self.length/1000.0) * self.num_lanes
@@ -83,19 +85,18 @@ class LaneGroup:
         self.transit_time_sec = (self.length/rp.speed)* 3.6 # [m]/[kph] -> [sec]
         self.saturation_flow_rate_vps = rp.capacity*self.num_lanes/3600
 
+        self.actuator_capacity = None
 
-        # self.outlink2roadconnection = dict()
-        # if out_rcs is not None:
-        #     for rc in out_rcs:
-        #         rc.in_lanegroups.add(self)
-        #         if rc.end_link is not None:
-        #             self.outlink2roadconnection[rc.end_link.id] = rc
+        self.outlink2roadconnection = dict()
+        if out_rcs is not None:
+            for rc in out_rcs:
+                # rc.in_lanegroups.add(self)
+                self.outlink2roadconnection[rc.out_link] = rc
 
-        self.transit_queue = VehicleQueue()
-        self.waiting_queue = VehicleQueue()
+        self.transit_queue = VehicleQueue(self)
+        self.waiting_queue = VehicleQueue(self)
 
-
-    def register_actuator(self,act:"AbstractActuator"):
+    def register_actuator(self,act:"ActuatorSignal"):
         self.actuator_capacity = act
 
     def initialize(self,scenario) -> None:
@@ -104,7 +105,8 @@ class LaneGroup:
         self.waiting_queue.clear()
 
         # register first vehicle exit
-        self.schedule_release_vehicle(scenario.dispatcher)
+        # TODO : Uncomment this
+        # self.schedule_release_vehicle(scenario.dispatcher)
 
         self.update_long_supply()
 
@@ -114,10 +116,11 @@ class LaneGroup:
     def get_total_vehicles(self) -> float:
         return self.transit_queue.get_total_vehicles() + self.transit_queue.get_total_vehicles()
 
+    def get_supply_per_lane(self) -> float:
+        return self.longitudinal_supply / self.num_lanes
+
     # def get_waiting_supply(self,) -> float:
     #     return self.waiting_queue.lanegroup.get_long_supply()
-
-
 
     def set_actuator_capacity_vps(self,rate_vps:float) -> None:
         if rate_vps<0:
@@ -155,42 +158,28 @@ class LaneGroup:
     #     return self.longitudinal_supply * self.length / self.max_vehicles
 
 
-     # * A core.packet arrives at this lanegroup.
-     # * Vehicles do not know their next_link. It is assumed that the core.packet fits in this lanegroup.
-     # * 1. convert the core.packet to models.fluid.ctm.micro, models.fluid.ctm.pq, or models.fluid.ctm. This involves memory kept in the lanegroup.
+     # * A vehicle arrives at this lanegroup.
+     # * Vehicles do not know their next_link. It is assumed that the vehicle fits in this lanegroup.
      # * 2. tag it with next_link and target lanegroups.
      # * 3. add the core.packet to this lanegroup.
+    def add_vehicle(self, timestamp:float, veh:'Vehicle',dispatcher:'Dispatcher') -> None:
 
-    def add_vehicle(self, timestamp:float, vp, next_link_id:int) -> None:
-        pass
+        # tell the event listeners
+        # if veh.get_event_listeners() is not None:
+        #     for ev in veh.get_event_listeners():
+        #         ev.move_from_to_queue(timestamp,veh,veh.my_queue,self.transit_queue)
 
-        # next_rc = self.outlink2roadconnection.get(next_link_id)
-        # next_link_not_accessible = next_rc is None
-        #
-        # # for each vehicle
-        # for veh in self.create_vehicles_from_packet(vp,next_link_id):
-        #
-        #     veh.waiting_for_lane_change = next_link_not_accessible
-        #
-        #     # tell the event listeners
-        #     if veh.get_event_listeners() is not None:
-        #         for ev in veh.get_event_listeners():
-        #             ev.move_from_to_queue(timestamp,veh,veh.my_queue,self.transit_queue)
-        #
-        #     # tell the vehicle it has moved
-        #     veh.move_to_queue(timestamp,self.transit_queue)
-        #
-        #     # tell the travel timers
-        #     # if travel_timer is not None:
-        #     #     self.travel_timer.vehicle_enter(timestamp,veh)
-        #
-        #     # register_with_dispatcher dispatch to go to waiting queue
-        #     dispatcher.register_event(EventTransitToWaiting(dispatcher,timestamp + self.transit_time_sec,veh))
-        #
-        # self.update_long_supply()
+        # tell the vehicle it has moved
+        veh.move_to_queue(timestamp,self,self.transit_queue)
 
+        # tell the travel timers
+        # if travel_timer is not None:
+        #     self.travel_timer.vehicle_enter(timestamp,veh)
 
+        # dispatch to go to waiting queue
+        dispatcher.register_event(EventTransitToWaiting(dispatcher,timestamp + self.transit_time_sec,veh))
 
+        self.update_long_supply()
 
     # /**
     #  * An event signals an opportunity to release a vehicle. The lanegroup must,
@@ -201,7 +190,6 @@ class LaneGroup:
     #  * 3. call add_vehicle_packet for each reduces core.packet.
     #  * 4. remove the vehicle packets from this lanegroup.
     #  */
-
     def release_vehicles(self,timestamp:float) -> None:
         pass
 
@@ -209,16 +197,11 @@ class LaneGroup:
         # self.schedule_release_vehicle(timestamp)
         #
         # # ignore if waiting queue is empty
-        # if self.waiting_queue.num_vehicles()==0:
+        # if self.waiting_queue.get_total_vehicles()==0:
         #     return
         #
         # # otherwise get the first vehicle
         # vehicle = self.waiting_queue.peek_vehicle()
-        #
-        # # is this vehicle waiting to change lanes out of its queue?
-        # # if so, the lane group is blocked
-        # if vehicle.waiting_for_lane_change:
-        #     return
         #
         # next_supply = float('inf')
         # next_link:"Link" = None
@@ -227,14 +210,9 @@ class LaneGroup:
         # if not self.link.is_sink():
         #
         #     # get next link
-        #     state = vehicle.get_state()
+        #     next_link_id = vehicle.next_link_id
         #
-        #     if state.isPath:
-        #         next_link_id =  self.link.get_next_link_in_path(state.pathOrlink_id).id
-        #     else:
-        #         next_link_id = state.pathOrlink_id
-        #
-        #     rc = self.outlink2roadconnection.get(next_link_id)
+        #     rc = self.outlink2roadconnection[next_link_id]
         #
         #     next_link = rc.get_end_link()
         #
@@ -246,7 +224,7 @@ class LaneGroup:
         # if next_supply > 0:
         #
         #     # remove vehicle from this lanegroup
-        #     self.waiting_queue.remove_given_vehicle(timestamp,vehicle);
+        #     self.waiting_queue.remove_given_vehicle(timestamp,vehicle)
         #
         #     # inform flow accumulators
         #     self.update_flow_accummulators(vehicle.get_state(),1.0)
@@ -269,8 +247,6 @@ class LaneGroup:
         #
         #     self.update_long_supply()
 
-
-
     def schedule_release_vehicle(self,dispatcher) -> None:
         nowtime = dispatcher.current_time
         wait_time = get_waiting_time(self.saturation_flow_rate_vps)
@@ -278,15 +254,11 @@ class LaneGroup:
             timestamp = nowtime + wait_time
             dispatcher.register_event(EventReleaseVehicleFromLaneGroup(dispatcher,timestamp,self))
 
+    def __str__(self) -> str:
+        return "lg link {}, lanes {}-{}".format(self.link.id,self.start_lane_dn,
+                                                self.start_lane_dn+self.num_lanes-1)
 
 
-    # public void initialize(Scenario scenario, float start_time) throws OTMException {
-    #     if(link.is_model_source_link)
-    #         this.buffer = new StateContainer();
-    #
-    #     if(flw_acc!=null)
-    #         flw_acc.reset();
-    # }
 
     # public final FlowAccumulatorState request_flow_accumulator(Set<Long> comm_ids){
     #     if(flw_acc==null)

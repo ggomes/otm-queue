@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING,Optional, Any
+import os
 if TYPE_CHECKING:
     from core import Scenario
+    from Events import Dispatcher
 
 class AbstractEvent(ABC):
     timestamp: float
@@ -29,6 +31,13 @@ class AbstractEvent(ABC):
             return True
         return False
 
+    def __str__(self) -> str:
+        return "time: {:.2f}, event: {}, recipient: {}".format(
+            self.timestamp,
+            self.__class__.__name__,
+            self.recipient
+        )
+
 class EventPoke(AbstractEvent):
 
     def __init__(self,dispatcher, dispatch_order:int, timestamp:float, recipient) -> None:
@@ -51,9 +60,9 @@ class AbstractActuator(ABC):
     @abstractmethod
     def process_command(self, timestamp: float) -> None: pass
 
-    def __init__(self, id:int, scenario:"Scenario", jsonact):
+    def __init__(self, selfid:int, scenario:"Scenario", jsonact):
 
-        self.id = id
+        self.id = selfid
         self.type = jsonact['type']
         self.dt = float(jsonact['dt']) if 'dt' in jsonact.keys() else None
         self.command = None
@@ -83,9 +92,6 @@ class AbstractController(ABC):
     actuators:dict[int,AbstractActuator]
     command:dict[int, Optional[AbstractCommand]] # actuator id -> command
     dt:Optional[float]
-
-    # event_output:OutputController
-
 
     @abstractmethod
     def update_command(self, dispatcher) -> None:
@@ -121,3 +127,46 @@ class AbstractController(ABC):
         # wake up in dt, if dt is defined
         if (self.dt is not None) and (self.dt > 0):
             dispatcher.register_event(EventPoke(dispatcher, 20, timestamp + self.dt, self))
+
+class AbstractOutput(ABC):
+
+    scenario : 'Scenario'
+    mytype : str
+
+    @abstractmethod
+    def get_name(self) -> str: pass
+
+    @abstractmethod
+    def get_str(self) -> str: pass
+
+    def __init__(self,scenario:'Scenario',request:dict[str,str]) -> None:
+        self.scenario = scenario
+        self.mytype = request['type']
+        self.file = None
+
+    def initialize(self,dispatcher:'Dispatcher',folder_prefix:str) -> None:
+        self.file = open(f"{folder_prefix}_{self.get_name()}.csv", 'w')
+
+    def close(self) -> None:
+        self.file.close()
+
+class AbstractOutputTimed(AbstractOutput, ABC):
+    dt:float
+
+    def __init__(self,scenario:'Scenario',request:dict[str,str]) -> None:
+        super().__init__(scenario,request)
+        self.dt = float(request['dt'])
+
+    def initialize(self, dispatcher,folder_prefix) -> None:
+        super().initialize(dispatcher,folder_prefix)
+        dispatcher.register_event(EventPoke(dispatcher,
+                                            dispatch_order=70,
+                                            timestamp=0.0,
+                                            recipient=self))
+
+    def poke(self,dispatcher:'Dispatcher', timestamp:float) -> None:
+        self.file.write('{},{}\n'.format(timestamp,self.get_str()))
+        dispatcher.register_event(EventPoke(dispatcher,
+                                            dispatch_order=70,
+                                            timestamp=timestamp + self.dt,
+                                            recipient=self))

@@ -1,13 +1,16 @@
 from typing import TYPE_CHECKING, Optional
 import json
+import os
 from SimpleClasses import VehicleType, RoadConnection
 from Link import Link
-from profiles import Demand, SplitMatrixProfile
+from Demand import Demand
+from Splits import SplitMatrixProfile
 from Signal import ActuatorSignal
 from Controller import ControllerStage
 from LaneGroup import LaneGroup
 import numpy as np
 from Events import Dispatcher, EventStopSimulation
+from Output import *
 
 if TYPE_CHECKING:
     from abstract import *
@@ -91,6 +94,7 @@ class Network:
                     link.is_sink = True
 
         # read road connections
+        roadconn = dict()
         for strid, roadconnjson in netjson['roadconnections'].items():
 
             in_link_id = int(roadconnjson['in_link'])
@@ -107,6 +111,8 @@ class Network:
                 in_link=in_link_id,
                 in_link_lanes=in_link_lanes,
                 out_link=int(roadconnjson['out_link']))
+
+            roadconn[rc.id] = rc
 
             # add road connections to nodes
             in_link.endnode.add_road_connection(rc)
@@ -125,7 +131,7 @@ class Network:
             # create set of all intersections of out_rcs up lanes
             lane_sets:set[tuple[int,int]] = set()
             for rc in out_rcs:
-                if in_link_lanes is None:
+                if rc.in_link_lanes is None:
                     lane_sets.add((1,link.full_lanes))
                 else:
                     lane_sets.add(rc.in_link_lanes)
@@ -144,7 +150,9 @@ class Network:
             lane2rcs = list()
             for start_lane in range(1,link.full_lanes+1):
                 lane2rcs.append(frozenset(
-                    {rc.id for rc in out_rcs if start_lane >= rc.in_link_lanes[0] and start_lane <= rc.in_link_lanes[1]}
+                    {rc.id for rc in out_rcs
+                     if (start_lane >= rc.in_link_lanes[0]) and
+                        (start_lane <= rc.in_link_lanes[1])}
                 ))
 
             for myrcs in set(lane2rcs):
@@ -154,16 +162,14 @@ class Network:
                 lg_num_lanes = lanes_in_lg.shape[0]
                 lanegroup = LaneGroup(link=link,
                                       length=link.length,
-                                      num_lanes=link.full_lanes,
+                                      num_lanes=lg_num_lanes,
                                       start_lane=lg_start_lane,
                                       rp=link.roadparam,
-                                      out_rcs=set(myrcs))
+                                      out_rcs=[roadconn[rcid] for rcid in myrcs])
 
                 lanegroups.append(lanegroup)
 
             link.set_lanegroups(lanegroups)
-
-
 
 
             # # populate rc.out_lanegroups
@@ -174,15 +180,13 @@ class Network:
             #             rc.out_lanegroups.add(link.get_lanegroup_for_up_lane(lane));
 
 
-            # # populate link.outlink2lanegroups
-            # if not link.is_sink():
-            #     link.outlink2lanegroups = dict()
-            #     for outlink in link.end_node.out_links:
-            #         Set<AbstractLaneGroup> lgs = link.lgs.stream()
-            #                 .filter(lg -> lg.outlink2roadconnection.containsKey(outlink.getId()))
-            #                 .collect(Collectors.toSet());
-            #         if(!lgs.isEmpty())
-            #             link.outlink2lanegroups.put(outlink.getId(), lgs);
+            # populate link.outlink2lanegroups
+            if not link.is_sink:
+                link.outlink2lanegroups = dict()
+                for outlink in link.endnode.out_links.keys():
+                    lgs = [lg for lg in link.lgs if outlink in lg.outlink2roadconnection.keys()]
+                    if len(lgs)>0:
+                        link.outlink2lanegroups[outlink] = lgs
 
             # # create vehicle sources
             # if scenario.demands.containsKey(link.getId()):
@@ -200,8 +204,10 @@ class Scenario:
     network : Network
     vtypes : dict[int, "VehicleType"]
     controllers : dict[int,"AbstractController"]
-    actuators : dict[int,"AbstractActuator"]
-    demands : dict[int,set["Demand"]]
+    actuators : dict[int,"AbstractActuator"]       # TODO WHY?
+    demands : dict[int,set["Demand"]]              # TODO WHY?
+    outputs : list['AbstractOutput']
+    folder_prefix : str
 
     def __init__(self,filename:str,validate:Optional[bool]=False) -> None:
 
@@ -224,37 +230,22 @@ class Scenario:
         # read demands
         self.demands = dict()
         for x in scnjson['demands']:
-            linkid = int(x['link'])
-            link = self.network.links[linkid]
-            demand:Demand = Demand(x)
+            demand:Demand = Demand(x,self)
+            linkid = demand.link.id
             if linkid not in self.demands.keys():
                 self.demands[linkid] = set()
             self.demands[linkid].add(demand)
-            link.add_demand(demand)
+            demand.link.add_demand(demand)
 
         # read splits
         for x in scnjson['splits']:
+            split = SplitMatrixProfile(x,self)
+            linkin:Link = split.linkin
+            if split.vtype.id in linkin.split_profile.keys():
+                raise(Exception("Reapeated splits for link"))
+            else:
+                linkin.split_profile[split.vtype.id] = split
 
-            nodeid:int = int(x['node'])
-            vtid = int(x['vtype'])
-            linkinid:int = int(x['link_in'])
-            start_time:float = float(x['start_time']) if 'start_time' in x.keys() else 0.0
-            dt:Optional[float] = float(x['dt']) if 'dt' in x.keys() else None
-
-            # get node and link
-            # node:Node = self.network.nodes[nodeid]
-            linkin:Link = self.network.links[linkinid]
-
-            # get smp
-            if vtid not in linkin.split_profile.keys():
-                linkin.split_profile[vtid] = SplitMatrixProfile(vtid, linkin,start_time,dt)
-            smp = linkin.split_profile[vtid]
-
-            # read splits
-            for strid,v in x['link_out_value'].items():
-                linkoutid = int(strid)
-                values = [float(s) for s in v.split(',')]
-                smp.splits.add_entry(linkoutid, values)
 
         # read actuators
         self.actuators = dict()
@@ -277,8 +268,29 @@ class Scenario:
             else:
                 raise(Exception(f"Error: Unknown controller type {cnttype}"))
 
-    def request_outputs(self,requests:Optional[tuple[dict]]=None) -> None:
-        pass
+    def request_outputs(self, output_folder:str, prefix:str, requests:Optional[list[dict[str,str]]]=None) -> None:
+        if requests is None:
+            return
+        self.folder_prefix = os.path.join(output_folder,prefix)
+        self.outputs = list()
+        for request in requests:
+            mytype = request['type']
+            if mytype=='link_flw':
+                output = OutputLinkFlow(self,request)
+            elif mytype=='link_veh':
+                output = OutputLinkVeh(self,request)
+            elif mytype=='lg_flw':
+                output = OutputLanegroupFlow(self,request)
+            elif mytype=='lg_veh':
+                output = OutputLanegroupVeh(self,request)
+            elif mytype=='veh_events':
+                output = OutputVehicleEvents(self,request)
+            elif mytype=='cnt_events':
+                output = OutputControllerEvents(self,request)
+            else:
+                raise(Exception("Unknown output type"))
+
+            self.outputs.append(output)
 
     def initialize(self,output_prefix:Optional[str]='',validate:Optional[bool]=False) -> bool :
 
@@ -303,9 +315,9 @@ class Scenario:
         # for(AbstractOutput x : outputs)
         #     x.initialize(this);
 
-        # register_with_dispatcher timed writer events
-        # for AbstractOutput output : outputs)
-        #     output.register(runParams,dispatcher);
+        #  timed writer events
+        for output in self.outputs:
+            output.initialize(self.dispatcher,self.folder_prefix)
 
         for link in self.network.links.values():
             link.initialize(self)
@@ -338,7 +350,7 @@ class Scenario:
         # register stop the simulation
         now = self.dispatcher.current_time
         self.dispatcher.stop_time = now+duration
-        self.dispatcher.register_event(EventStopSimulation(self.dispatcher,now+duration))
+        self.dispatcher.register_event(EventStopSimulation(self.dispatcher,now+duration,self))
 
         # register scenario events
         # for e in self.events:
@@ -348,3 +360,6 @@ class Scenario:
         # process all events
         self.dispatcher.dispatch_all_events()
 
+    def close_outputs(self):
+        for output in self.outputs:
+            output.close()

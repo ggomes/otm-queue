@@ -1,19 +1,36 @@
 from typing import TYPE_CHECKING
-from profiles import Demand
+
+import numpy as np
+
+from Demand import Demand
 from SimpleClasses import RoadParams
+import random
 
 if TYPE_CHECKING:
-    from profiles import SplitMatrixProfile
+    from Splits import SplitMatrixProfile
     from LaneGroup import LaneGroup
-    from core import Scenario
+    from core import Scenario, Node
 
 class Link:
 
+    id: int
+    full_lanes: int
+    length: float
+    startnode: 'Node'
+    endnode: 'Node'
+    roadparam: RoadParams
+    demands: list[Demand]
+    split_profile: dict[int, 'SplitMatrixProfile']
+    lgs: list['LaneGroup']
+    is_source: bool
+    is_sink: bool
+    outlink2lanegroups: dict[int, list['LaneGroup']]
+
     def __init__(self,network,linkid:int,jsonlink:dict,roadparam:dict) -> None:
 
-        self.id:int = linkid
-        self.full_lanes:int = int(jsonlink['full_lanes'])
-        self.length:float = float(jsonlink['length'])
+        self.id = linkid
+        self.full_lanes = int(jsonlink['full_lanes'])
+        self.length = float(jsonlink['length'])
         self.startnode = network.nodes[int(jsonlink['start'])]
         self.startnode.add_output_link(self)
         self.endnode = network.nodes[int(jsonlink['end'])]
@@ -21,11 +38,9 @@ class Link:
         self.roadparam = RoadParams(capacity = float(roadparam['capacity']),
                                     speed =  float(roadparam['speed']),
                                     jam_density =  float(roadparam['jam_density']) )
-        self.demands:list[Demand] = list()
-        self.split_profile:dict[int,SplitMatrixProfile] = dict()
-
-        self.lgs : list[LaneGroup] = list()
-
+        self.demands = list()
+        self.split_profile = dict()
+        self.lgs = list()
         self.is_source = False
         self.is_sink = False
 
@@ -34,7 +49,7 @@ class Link:
         # dnlane2lanegroup : dict[int,LaneGroup] = dict()
 
         # outlink -> lanegroups from which outlink is reachable
-        # outlink2lanegroups : dict[int,set[LaneGroup] = set()
+        self.outlink2lanegroups = dict()
 
         # control flows to downstream links
         # unique_acts_flowToLinks : set[ActuatorFlowToLinks]
@@ -78,3 +93,20 @@ class Link:
 
         for d in self.demands:
             d.initialize(scenario.dispatcher)
+
+    def sample_next_link(self,vtid:int) -> int:
+        if len(self.split_profile)>0:
+            return self.split_profile[vtid].sample_output_link()
+        else:
+            return random.choice(list(self.endnode.out_links.keys()))
+
+    def get_lanegroups_for_outlink(self,next_link:int) -> list['LaneGroup']:
+        if len(self.outlink2lanegroups)>0:
+            return self.outlink2lanegroups[next_link]
+        else:
+            return self.lgs
+
+    def argmax_supply(self, candidate_lanegroups: list['LaneGroup']) -> 'LaneGroup':
+        ind = np.argmax([lg.get_supply_per_lane() for lg in candidate_lanegroups])
+        return candidate_lanegroups[ind]
+

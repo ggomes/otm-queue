@@ -1,9 +1,11 @@
 from typing import Optional
 import numpy as np
 
+vehicle_id_count = 0
+
 def get_waiting_time(rate: float) -> Optional[float]:
 
-    if rate<0:
+    if rate<=0:
         return float('inf')
 
     process = 'poisson'
@@ -17,3 +19,9 @@ def get_waiting_time(rate: float) -> Optional[float]:
         print("Error: Unknown process")
 
     return wait
+
+def get_vehicle_id():
+    global vehicle_id_count
+    vehicle_id_count += 1
+    return vehicle_id_count
+

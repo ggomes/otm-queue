@@ -33,8 +33,8 @@ class ControllerStage(AbstractController):
     curr_stage_index: int
     signal:'ActuatorSignal'
 
-    def __init__(self,id:int, jsoncntrl,acts:dict[int,'AbstractActuator']) -> None:
-        super().__init__(id,jsoncntrl,acts)
+    def __init__(self,selfid:int, jsoncntrl,acts:dict[int,'AbstractActuator']) -> None:
+        super().__init__(selfid,jsoncntrl,acts)
 
         self.signal = next(iter(self.actuators.values()))  # type: ignore
 
@@ -63,8 +63,6 @@ class ControllerStage(AbstractController):
     def initialize(self,scenario) -> None:
         super().initialize(scenario)
         self.signal.initialize()
-
-
 
     def update_command(self, dispatcher) -> None:
 
@@ -105,3 +103,8 @@ class ControllerStage(AbstractController):
             start_time = end_time
 
         return StageindexReltime(0,0)
+
+    def __str__(self) -> str:
+        return "cntr id={}".format(self.id)
+
+
