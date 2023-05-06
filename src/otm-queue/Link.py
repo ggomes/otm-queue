@@ -1,7 +1,5 @@
 from typing import TYPE_CHECKING
-
 import numpy as np
-
 from Demand import Demand
 from SimpleClasses import RoadParams
 import random
@@ -110,3 +108,5 @@ class Link:
         ind = np.argmax([lg.get_supply_per_lane() for lg in candidate_lanegroups])
         return candidate_lanegroups[ind]
 
+    def get_total_vehicles(self) -> float:
+        return sum([lg.get_total_vehicles() for lg in self.lgs])

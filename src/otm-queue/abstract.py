@@ -137,6 +137,9 @@ class AbstractOutput(ABC):
     def get_name(self) -> str: pass
 
     @abstractmethod
+    def get_header(self) -> str: pass
+
+    @abstractmethod
     def get_str(self) -> str: pass
 
     def __init__(self,scenario:'Scenario',request:dict[str,str]) -> None:
@@ -146,6 +149,7 @@ class AbstractOutput(ABC):
 
     def initialize(self,dispatcher:'Dispatcher',folder_prefix:str) -> None:
         self.file = open(f"{folder_prefix}_{self.get_name()}.csv", 'w')
+        self.file.write(self.get_header()+'\n')
 
     def close(self) -> None:
         self.file.close()
