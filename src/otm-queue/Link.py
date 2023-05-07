@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 import numpy as np
 from Demand import Demand
 from SimpleClasses import RoadParams
@@ -8,6 +8,8 @@ if TYPE_CHECKING:
     from Splits import SplitMatrixProfile
     from LaneGroup import LaneGroup
     from core import Scenario, Node
+    from Events import Dispatcher
+    from Vehicle import Vehicle
 
 class Link:
 
@@ -22,7 +24,7 @@ class Link:
     lgs: list['LaneGroup']
     is_source: bool
     is_sink: bool
-    outlink2lanegroups: dict[int, list['LaneGroup']]
+    nextlink2lanegroups: dict[int, list['LaneGroup']]
 
     def __init__(self,network,linkid:int,jsonlink:dict,roadparam:dict) -> None:
 
@@ -47,7 +49,7 @@ class Link:
         # dnlane2lanegroup : dict[int,LaneGroup] = dict()
 
         # outlink -> lanegroups from which outlink is reachable
-        self.outlink2lanegroups = dict()
+        self.nextlink2lanegroups = dict()
 
         # control flows to downstream links
         # unique_acts_flowToLinks : set[ActuatorFlowToLinks]
@@ -98,15 +100,32 @@ class Link:
         else:
             return random.choice(list(self.endnode.out_links.keys()))
 
-    def get_lanegroups_for_outlink(self,next_link:int) -> list['LaneGroup']:
-        if len(self.outlink2lanegroups)>0:
-            return self.outlink2lanegroups[next_link]
+    def get_lanegroups_for_nextlink(self, next_link:int) -> list['LaneGroup']:
+        if len(self.nextlink2lanegroups)>0:
+            return self.nextlink2lanegroups[next_link]
         else:
             return self.lgs
 
     def argmax_supply(self, candidate_lanegroups: list['LaneGroup']) -> 'LaneGroup':
         ind = np.argmax([lg.get_supply_per_lane() for lg in candidate_lanegroups])
         return candidate_lanegroups[ind]
+
+    def add_vehicle(self,vehicle:'Vehicle',dispatcher:'Dispatcher',joinlg:Optional['LaneGroup']):
+
+        # sample its next link
+        next_link_id = self.sample_next_link(vehicle.vtype.id)
+        vehicle.next_link_id = next_link_id
+
+        # candidate lane groups
+        candidate_lane_groups:list[LaneGroup] = self.get_lanegroups_for_nextlink(vehicle.next_link_id)
+
+        # pick from among the eligible lane groups
+        if joinlg is None:
+            joinlg = self.argmax_supply(candidate_lane_groups)
+
+        # add to joinlanegroup
+        joinlg.add_vehicle(vehicle,dispatcher)
+
 
     def get_total_vehicles(self) -> float:
         return sum([lg.get_total_vehicles() for lg in self.lgs])

@@ -62,7 +62,7 @@ class ControllerStage(AbstractController):
 
     def initialize(self,scenario) -> None:
         super().initialize(scenario)
-        self.signal.initialize()
+        # self.signal.initialize()
 
     def update_command(self, dispatcher) -> None:
 

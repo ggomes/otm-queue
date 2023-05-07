@@ -2,6 +2,9 @@ import unittest
 import numpy as np
 import matplotlib.pyplot as plt
 from core import Scenario
+import heapq
+
+
 
 class MyTestCase(unittest.TestCase):
 
@@ -37,6 +40,26 @@ class MyTestCase(unittest.TestCase):
         while not q.empty():
             print(q.get())
         self.assertTrue(True)
+
+    def test_heapqueue(self) -> None:
+        a = [(1,"asgs"),(7,"ro320("),(-1,"sdsfd("),(2,"ddddd(")]
+        heapq.heapify(a)
+
+        print("heapify:")
+        print(a)
+
+        print("pop:")
+        print(heapq.heappop(a))
+        print(a)
+
+
+        print("remove 2:")
+        a.remove((2,"ddddd("))
+        print(a)
+
+        print("pop:")
+        print(heapq.heappop(a))
+        print(a)
 
     def test_random_choice(self) -> None:
         N = 100

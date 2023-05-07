@@ -7,8 +7,8 @@ if TYPE_CHECKING:
 
 class AbstractEvent(ABC):
     timestamp: float
-    recipient: Any
     dispatch_order: int
+    recipient: Any
 
     def __init__(self, dispatcher, dispatch_order: int, timestamp: float, recipient: Any) -> None:
         self.dispatcher = dispatcher
@@ -58,7 +58,10 @@ class AbstractActuator(ABC):
     command:Optional[AbstractCommand]
 
     @abstractmethod
-    def process_command(self, timestamp: float) -> None: pass
+    def process_command(self, timestamp: float,dispatcher:'Dispatcher') -> None: pass
+
+    @abstractmethod
+    def register_with_targets(self) -> None: pass
 
     def __init__(self, selfid:int, scenario:"Scenario", jsonact):
 
@@ -76,11 +79,10 @@ class AbstractActuator(ABC):
         else:
             print(f'Error: Unknown target type {tgttype}')
 
-
     def poke(self,dispatcher, timestamp:float):
 
         # process the command
-        self.process_command(timestamp)
+        self.process_command(timestamp,dispatcher)
 
         # wake up in dt, if dt is defined
         if self.dt is not None:

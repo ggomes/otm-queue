@@ -57,14 +57,14 @@ class OutputLanegroupVeh(AbstractOutputTimed):
         header = 'time,'
         for link in self.scenario.network.links.values():
             for lg in link.lgs:
-                header += "({};{};{}),".format(link.id,lg.start_lane_dn,lg.num_lanes)
+                header += "({};{};{}),".format(link.id, lg.start_lane, lg.num_lanes)
         return header[:-1]
 
     def get_str(self) -> str:
         z = ''
         for link in self.scenario.network.links.values():
             z += ','+','.join([str(lg.get_total_vehicles()) for lg in link.lgs])
-        return z
+        return z[1:]
     
 class OutputVehicleEvents(AbstractOutput):
 

@@ -44,7 +44,7 @@ class EventCreateVehicle(AbstractEvent):
 
     def action(self) -> None:
         demand = self.recipient
-        demand.insert_vehicle(self.timestamp,self.dispatcher)
+        demand.insert_vehicle(self.dispatcher)
         demand.schedule_next_vehicle(self.dispatcher)
 
 class EventTransitToWaiting(AbstractEvent):
@@ -68,13 +68,13 @@ class EventTransitToWaiting(AbstractEvent):
 
         vehicle.move_to_queue(self.timestamp,lanegroup,lanegroup.waiting_queue)
 
-class EventReleaseVehicleFromLaneGroup(AbstractEvent):
+class EventSeviceLanegroupWaitingQueue(AbstractEvent):
 
     def __init__(self,dispatcher,timestamp:float, obj) -> None:
         super().__init__(dispatcher,45,timestamp,obj)
 
     def action(self) -> None:
-        self.recipient.release_vehicle(self.timestamp)
+        self.recipient.service_waiting_queue(self.dispatcher)
 
 class EventStopSimulation(AbstractEvent):
 
@@ -110,10 +110,20 @@ class Dispatcher:
             return
         self.events.put((event.timestamp,event))
 
+
+    def remove_events_for_recipient(self) -> None:
+        pass
+
+        # Set < AbstractEvent > remove = events.stream()
+        #     .filter(x->x.recipient == recipient & & clazz.isAssignableFrom(x.getClass()) )
+        #     .collect(toSet());
+        # events.removeAll(remove);
+
     def dispatch_all_events(self) -> None:
         while self.events.qsize()>0:
             timestamp, event = self.events.get()
             self.current_time = timestamp
-            # print(event)
+            print(event)
             event.action()
         print('done')
+

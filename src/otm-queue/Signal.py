@@ -6,6 +6,7 @@ from abstract import AbstractActuator, AbstractCommand
 if TYPE_CHECKING:
     from core import Scenario
     from LaneGroup import LaneGroup
+    from Events import Dispatcher
 
 BulbColor = Enum('BulbColor', ['RED', 'GREEN', 'DARK'])
 
@@ -20,28 +21,20 @@ class SignalPhase:
     bulbcolor:BulbColor   # state: bulb color and transition pointer
     lanegroups: set["LaneGroup"]
 
-    def __init__(self,scenario, actuator:AbstractActuator , jsonphase) -> None:
+    def __init__(self,scenario, actuator:AbstractActuator , jsonphase, rc2inlgs) -> None:
         self.my_signal = actuator
         self.phaseid = int(jsonphase['phase'])
-        self.lanegroups = set()
 
         # populate lanegroups
-        # rcids = {int(rcid) for rcid in jsonphase['roadconnections'].split(',')}
-        # node = self.my_signal.target
-        # nodeid = node.id
-        # for rcid in rcids:
-        #     node = scenario.network.nodes[nodeid]
-        #     rc = node.road_connections[rcid]
-        #     self.lanegroups.add(rc.get_in_lanegroups())
+        rcids = [int(rcid) for rcid in jsonphase['roadconnections'].split(',')]
+        self.lanegroups = set()
+        for rcid in rcids:
+            self.lanegroups = self.lanegroups.union(set(rc2inlgs[rcid]))
 
-        # # register
-        # for lg in self.lanegroups:
-        #     lg.register_actuator(None, self.my_signal);
+    # def initialize(self)-> None:
+    #     self.bulbcolor = BulbColor.DARK
 
-    def initialize(self)-> None:
-        self.bulbcolor = BulbColor.DARK
-
-    def set_bulb_color(self,to_color:BulbColor) -> None:
+    def set_bulb_color(self,to_color:BulbColor,dispatcher:'Dispatcher') -> None:
 
         # set the state
         self.bulbcolor = to_color
@@ -54,29 +47,31 @@ class SignalPhase:
 
         # send to lane groups
         for lg in self.lanegroups:
-            lg.set_actuator_capacity_vps(rate_vps)
+            lg.set_actuator_capacity_vps(rate_vps,dispatcher)
 
 class ActuatorSignal(AbstractActuator):
 
     signal_phases: dict[int, SignalPhase]
 
-    def __init__(self,id:int, scenario:"Scenario", jsonact) -> None:
-        super().__init__(id,scenario, jsonact)
+    def __init__(self,myid:int, scenario:"Scenario", jsonact, rc2inlgs) -> None:
+        super().__init__(myid,scenario, jsonact)
 
         # read signal phases
         self.signal_phases = dict()
         for jsonphase in jsonact['signal']:
             phaseid = int(jsonphase['phase'])
-            self.signal_phases[phaseid] = SignalPhase(scenario, self, jsonphase)
+            self.signal_phases[phaseid] = SignalPhase(scenario, self, jsonphase, rc2inlgs)
 
-        # register the actuator
-        self.target.register_actuator(self)
+    # def initialize(self) -> None:
+    #     for p in self.signal_phases.values():
+    #         p.initialize()
 
-    def initialize(self) -> None:
-        for p in self.signal_phases.values():
-            p.initialize()
+    def register_with_targets(self) -> None:
+        for signal_phase in self.signal_phases.values():
+            for lg in signal_phase.lanegroups:
+                lg.register_signal(self)
 
-    def process_command(self, timestamp: float) -> None:
+    def process_command(self, timestamp: float,dispatcher:'Dispatcher') -> None:
 
         if self.command is None:
             return
@@ -89,4 +84,4 @@ class ActuatorSignal(AbstractActuator):
                 bulbcolor = signalcommand[phase_id]
             else:
                 bulbcolor = BulbColor.RED
-            signalphase.set_bulb_color(bulbcolor)
+            signalphase.set_bulb_color(bulbcolor,dispatcher)

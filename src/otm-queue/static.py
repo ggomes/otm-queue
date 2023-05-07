@@ -3,22 +3,21 @@ import numpy as np
 
 vehicle_id_count = 0
 
-def get_waiting_time(rate: float) -> Optional[float]:
+def get_service_period(rate: float) -> Optional[float]:
 
     if rate<=0:
-        return float('inf')
+        return None
 
     process = 'poisson'
 
-    wait = 0.0
+    period = 0.0
     if process == 'poisson':
-        wait = -np.log(1.0 - np.random.rand()) / rate
+        period = -np.log(1.0 - np.random.rand()) / rate
     elif process == 'deterministic':
-        wait = 1.0 / rate
+        period = 1.0 / rate
     else:
         print("Error: Unknown process")
-
-    return wait
+    return period
 
 def get_vehicle_id():
     global vehicle_id_count

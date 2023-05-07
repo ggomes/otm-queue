@@ -42,7 +42,7 @@
 
     "roadconnections" : {
       "25": { "in_link":"2", "in_link_lanes":"2-3", "out_link":"5" },
-      "27": { "in_link":"2", "in_link_lanes":"1-2", "out_link":"7" },
+      "27": { "in_link":"2", "in_link_lanes":"1-1", "out_link":"7" },
 
       "41": { "in_link":"4", "out_link":"1" },
       "45": { "in_link":"4", "out_link":"5" },
@@ -108,11 +108,11 @@
       "type":"signal",
       "target": {"type":"node","id":"0"},
       "signal": [
-        {"phase":"5", "roadconnections":"27"},
+        {"phase":"5", "roadconnections":"25,27"},
         {"phase":"2", "roadconnections":"25"},
         {"phase":"4", "roadconnections":"41,47,45"},
         {"phase":"1", "roadconnections":"63"},
-        {"phase":"6", "roadconnection_ids":"61"},
+        {"phase":"6", "roadconnections":"61"},
         {"phase":"8", "roadconnections":"81,83,85"}
       ]
     } 
