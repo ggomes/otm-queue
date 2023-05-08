@@ -1,0 +1,34 @@
+{
+  "actuators" : {
+    "0": {
+      "type":"signal",
+      "target": {"type":"node","id":"0"},
+      "signal": [
+        {"phase":"5", "roadconnections":"27"},
+        {"phase":"2", "roadconnections":"25"},
+        {"phase":"4", "roadconnections":"41,47,45"},
+        {"phase":"1", "roadconnections":"63"},
+        {"phase":"6", "roadconnection_ids":"61"},
+        {"phase":"8", "roadconnections":"81,83,85"}
+      ]
+    } 
+  },
+
+  "controllers" : {
+    "0": {
+      "type":"sig_pretimed",
+      "target_actuators":"0",
+      "parameters":[
+        {"name":"cycle", "value":"60"},
+        {"name":"offset", "value":"0"}
+      ],
+      "stages" : [
+        {"phases":"2,6", "duration":"20"},
+        {"phases":"1,5", "duration":"20"},
+        {"phases":"4,8", "duration":"20"}
+      ]
+    } 
+  }
+
+}
+

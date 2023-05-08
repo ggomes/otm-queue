@@ -1,0 +1,47 @@
+{
+
+  "nodes": {
+    "0" : {"x":null,"y":null},
+    "1" : {"x":null,"y":null},
+    "2" : {"x":null,"y":null},
+    "3" : {"x":null,"y":null},
+    "4" : {"x":null,"y":null},
+    "5" : {"x":null,"y":null},
+    "6" : {"x":null,"y":null},
+    "7" : {"x":null,"y":null},
+    "8" : {"x":null,"y":null},
+  },
+
+  "links": {
+    "1": { "full_lanes":"3", "length":"100", "start":"0", "end":"1", "roadparam":"1"},
+    "2": { "full_lanes":"3", "length":"100", "start":"2", "end":"0", "roadparam":"1"},
+    "3": { "full_lanes":"3", "length":"100", "start":"0", "end":"3", "roadparam":"1"},
+    "4": { "full_lanes":"3", "length":"100", "start":"4", "end":"0", "roadparam":"1"},
+    "5": { "full_lanes":"3", "length":"100", "start":"0", "end":"5", "roadparam":"1"},
+    "6": { "full_lanes":"3", "length":"100", "start":"6", "end":"0", "roadparam":"1"},
+    "7": { "full_lanes":"3", "length":"100", "start":"0", "end":"7", "roadparam":"1"},
+    "8": { "full_lanes":"3", "length":"100", "start":"8", "end":"0", "roadparam":"1"}
+  },
+
+  "roadparams" : {
+    "1" : { "capacity":"1800", "speed":"60", "jam_density":"100" }
+  },
+
+  "roadconnections" : {
+    "25": { "in_link":"2", "in_link_lanes":"2-3", "out_link":"5" },
+    "27": { "in_link":"2", "in_link_lanes":"1-2", "out_link":"7" },
+
+    "41": { "in_link":"4", "out_link":"1" },
+    "45": { "in_link":"4", "out_link":"5" },
+    "47": { "in_link":"4", "out_link":"7" },
+
+    "61": { "in_link":"6", "in_link_lanes":"2-3", "out_link":"1" },
+    "63": { "in_link":"6", "in_link_lanes":"1-1", "out_link":"3" },
+
+    "81": { "in_link":"8", "out_link":"1" },
+    "83": { "in_link":"8", "out_link":"3" },
+    "85": { "in_link":"8", "out_link":"5" }
+  }
+  
+}
+

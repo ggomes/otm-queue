@@ -114,6 +114,6 @@ class Dispatcher:
         while self.events.qsize()>0:
             timestamp, event = self.events.get()
             self.current_time = timestamp
-            # print(event)
+            print(event)
             event.action()
         print('done')

@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 import json
 import os
 from SimpleClasses import VehicleType, RoadConnection
@@ -209,14 +209,27 @@ class Scenario:
     outputs : list['AbstractOutput']
     folder_prefix : str
 
-    def __init__(self,filename:str,validate:Optional[bool]=False) -> None:
+    def __init__(self,
+                 network_file:str,
+                 demand_file:str,
+                 control_file:str,
+                 output_requests: Optional[list[dict[str, str]]] = None,
+                 output_folder: Optional[str] = None,
+                 prefix: Optional[str] = None,
+                 check: Optional[bool] = False
+    ) -> None:
 
-        with open(filename) as f:
-            scnjson = json.load(f)
+        # read network
+        with open(network_file) as f:
+            jsonobj = json.load(f)
+        self.network = Network(jsonobj)
+
+        with open(demand_file) as f:
+            jsonobj = json.load(f)
 
         # read vehicle types
         self.vtypes = dict()
-        for key, val in scnjson['vehicletypes'].items():
+        for key, val in jsonobj['vehicletypes'].items():
             vtid:int = int(key)
             self.vtypes[vtid] = VehicleType(
                 id=vtid,
@@ -224,12 +237,9 @@ class Scenario:
                 pathfull=bool(val['pathfull'])
             )
 
-        # read network
-        self.network = Network(scnjson['network'])
-
         # read demands
         self.demands = dict()
-        for x in scnjson['demands']:
+        for x in jsonobj['demands']:
             demand:Demand = Demand(x,self)
             linkid = demand.link.id
             if linkid not in self.demands.keys():
@@ -238,7 +248,7 @@ class Scenario:
             demand.link.add_demand(demand)
 
         # read splits
-        for x in scnjson['splits']:
+        for x in jsonobj['splits']:
             split = SplitMatrixProfile(x,self)
             linkin:Link = split.linkin
             if split.vtype.id in linkin.split_profile.keys():
@@ -246,10 +256,12 @@ class Scenario:
             else:
                 linkin.split_profile[split.vtype.id] = split
 
+        with open(control_file) as f:
+            jsonobj = json.load(f)
 
         # read actuators
         self.actuators = dict()
-        for strid,jsonact in scnjson['actuators'].items():
+        for strid,jsonact in jsonobj['actuators'].items():
             actid = int(strid)
             acttype = jsonact['type']
             if acttype=='signal':
@@ -259,7 +271,7 @@ class Scenario:
 
         # read controllers
         self.controllers = dict()
-        for strid, jsoncnt in scnjson['controllers'].items():
+        for strid, jsoncnt in jsonobj['controllers'].items():
             cntid = int(strid)
             cnttype = jsoncnt['type']
             cntacts = {int(s):self.actuators[int(s)] for s in jsoncnt['target_actuators'].split(',')}
@@ -268,52 +280,31 @@ class Scenario:
             else:
                 raise(Exception(f"Error: Unknown controller type {cnttype}"))
 
-    def request_outputs(self, output_folder:str, prefix:str, requests:Optional[list[dict[str,str]]]=None) -> None:
-        if requests is None:
-            return
-        self.folder_prefix = os.path.join(output_folder,prefix)
-        self.outputs = list()
-        for request in requests:
-            mytype = request['type']
-            if mytype=='link_flw':
-                output = OutputLinkFlow(self,request)
-            elif mytype=='link_veh':
-                output = OutputLinkVeh(self,request)
-            elif mytype=='lg_flw':
-                output = OutputLanegroupFlow(self,request)
-            elif mytype=='lg_veh':
-                output = OutputLanegroupVeh(self,request)
-            elif mytype=='veh_events':
-                output = OutputVehicleEvents(self,request)
-            elif mytype=='cnt_events':
-                output = OutputControllerEvents(self,request)
-            else:
-                raise(Exception("Unknown output type"))
-
-            self.outputs.append(output)
-
-    def initialize(self,output_prefix:Optional[str]='',validate:Optional[bool]=False) -> bool :
+        # output requests
+        if output_requests is not None:
+            self.folder_prefix = os.path.join(output_folder,prefix)
+            self.outputs = list()
+            for request in output_requests:
+                mytype = request['type']
+                if mytype=='link_flw':
+                    output = OutputLinkFlow(self,request)
+                elif mytype=='link_veh':
+                    output = OutputLinkVeh(self,request)
+                elif mytype=='lg_flw':
+                    output = OutputLanegroupFlow(self,request)
+                elif mytype=='lg_veh':
+                    output = OutputLanegroupVeh(self,request)
+                elif mytype=='veh_events':
+                    output = OutputVehicleEvents(self,request)
+                elif mytype=='cnt_events':
+                    output = OutputControllerEvents(self,request)
+                else:
+                    raise(Exception("Unknown output type"))
+                self.outputs.append(output)
 
         # build and attach dispatcher
         self.dispatcher = Dispatcher()
         self.dispatcher.initialize()
-
-        # append outputs from output request file ..................
-        # if output_requests_file is not None and !output_requests_file.isEmpty()) :
-        #     jaxb.OutputRequests jaxb_or = load_output_request(output_requests_file, true);
-        #     scenario.outputs.addAll(create_outputs_from_jaxb(scenario,prefix,output_folder, jaxb_or));
-
-
-        # validate the run parameters and outputs
-        # OTMErrorLog errorLog1 = new OTMErrorLog();
-        # runParams.validate(errorLog1);
-        #
-        # // check validation
-        # errorLog1.check();
-
-        # initialize and register outputs
-        # for(AbstractOutput x : outputs)
-        #     x.initialize(this);
 
         #  timed writer events
         for output in self.outputs:
@@ -322,28 +313,27 @@ class Scenario:
         for link in self.network.links.values():
             link.initialize(self)
 
-        #####################################
-        # for model : models.values())
-        #     model.initialize(this,runParams.start_time);
-        #####################################
-
         for cnt in self.controllers.values():
             cnt.initialize(self)
 
-        # for(AbstractScenarioEvent event: events.values())
-        #     event.initialize(this);
+        if check:
+            self.check()
 
-        # if(path_tt_manager!=null)
-        #     path_tt_manager.initialize(dispatcher);
-
-        # validate
-        valid = True
-        if validate:
-            valid = True
-            # OTMErrorLog errorLog2 = validate_post_init();
-            # errorLog2.check();
-
+    def check(self) -> bool:
+        # TODO Implement this
         return True
+
+    def get_lanegroups(self) -> None:
+        pass
+
+    def set_state(self,state) -> None:
+        pass
+
+    def get_state(self) -> dict:
+        pass
+
+    def set_controller_command(self,command) -> None:
+        pass
 
     def run(self,duration):
 
