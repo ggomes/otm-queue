@@ -3,6 +3,7 @@ from typing import Optional
 from Events import EventSeviceLanegroupWaitingQueue, EventTransitToWaiting
 from collections import deque
 from static import get_service_period
+import numpy as np
 
 if TYPE_CHECKING:
     from core import Link
@@ -12,10 +13,12 @@ if TYPE_CHECKING:
     from Events import Dispatcher
 
 class VehicleQueue:
+    typestr:str
     queue:deque
     # lg:'LaneGroup'
 
-    def __init__(self,lg:'LaneGroup'):
+    def __init__(self,typestr:str):
+        self.typestr = typestr
         self.queue = deque()
         # self.lg = lg
 
@@ -29,7 +32,9 @@ class VehicleQueue:
         self.queue.append(v)
 
     def remove_lead_vehicle(self) -> None:
-        pass
+        if len(self.queue) == 0:
+            print("What?")
+        self.queue.popleft()
 
     def get_lead_vehicle(self) -> 'Vehicle':
         return self.queue[0]
@@ -39,39 +44,43 @@ class LaneGroup:
 
     link : "Link"
     num_lanes : int
-    length : float  # [m]
-
-    transit_queue: VehicleQueue
-    waiting_queue: VehicleQueue
+    start_lane: int
 
     max_vehicles : float
     transit_time_sec : float
-    nom_saturation_flow_rate_vps : float
-    outlink2outlgs:dict
-
-    actuator_capacity : Optional['ActuatorSignal']
     saturation_flow_rate_vps : float
+    nom_saturation_flow_rate_vps : float
     longitudinal_supply: float       # [veh]
+    nextlink2nextlgs:dict
+
+    actuator : bool
+    transit_queue: VehicleQueue
+    waiting_queue: VehicleQueue
 
     # flw_acc : FlowAccumulatorState # flow accumulator
 
-
-    def __init__(self,link:"Link",length:float , num_lanes:int , start_lane:int, rp:'RoadParams' , out_rcs:Optional[list['RoadConnection']] = None ) -> None:
+    def __init__(self,link:"Link", num_lanes:int , start_lane:int, rp:'RoadParams' , out_rcs:Optional[list['RoadConnection']] = None ) -> None:
 
         self.link = link
-        self.length = length
         self.num_lanes = num_lanes
         self.start_lane = start_lane
-        self.max_vehicles =  rp.jam_density * (self.length/1000.0) * self.num_lanes
-        self.transit_time_sec = (self.length/rp.speed)* 3.6 # [m]/[kph] -> [sec]
+
+        self.max_vehicles = rp.jam_density * (link.length/1000.0) * self.num_lanes
+        self.transit_time_sec = (link.length/rp.speed)* 3.6 # [m]/[kph] -> [sec]
         self.saturation_flow_rate_vps = rp.capacity*self.num_lanes/3600
         self.nom_saturation_flow_rate_vps = self.saturation_flow_rate_vps
-        self.actuator_capacity = None
-        self.transit_queue = VehicleQueue(self)
-        self.waiting_queue = VehicleQueue(self)
+        self.longitudinal_supply = 0.0
 
-    def register_signal(self,act:"ActuatorSignal"):
-        self.actuator_capacity = act
+        self.nextlink2nextlgs = dict()
+
+        self.has_actuator = False
+        self.transit_queue = VehicleQueue('transit')
+        self.waiting_queue = VehicleQueue('waiting')
+
+    def register_signal(self):
+        if self.has_actuator:
+            raise(Exception("Lanegroup is assigned multiple actuators"))
+        self.has_actuator = True
 
     def initialize(self,scenario) -> None:
 
@@ -113,7 +122,7 @@ class LaneGroup:
         # FOR EACH ONE GET THE RELEASE EVENT FROM THE DISPATCHER
         # REMOVE IT AND PUT IN ANOTHER ONE WITH UPDATED EXIT TIME
         now = dispatcher.current_time
-        dispatcher.remove_events_for_recipient(EventSeviceLanegroupWaitingQueue.__class__,self)
+        dispatcher.remove_events_for_recipient(EventSeviceLanegroupWaitingQueue,self)
 
         if self.saturation_flow_rate_vps<=0.0:
             return
@@ -176,17 +185,17 @@ class LaneGroup:
 
         if not self.link.is_sink:
             next_link_id = vehicle.next_link_id
-            if next_link_id in self.outlink2outlgs.keys():
-                nextlgs = self.outlink2outlgs[next_link_id]
-                nextlgs_supply = [lg.get_supply() for lg in nextlgs]
+            if next_link_id in self.link.endnode.out_links.keys():
+                nextlgs = self.link.endnode.out_links[next_link_id].lgs
+                nextlgs_supply = [lg.longitudinal_supply for lg in nextlgs]
                 nextlg_ind = np.argmax(nextlgs_supply)
                 nextlg = nextlgs[nextlg_ind]
                 nextlg_supply = nextlgs_supply[nextlg_ind]
 
         if nextlg_supply >= 1:
 
-            # remove vehicle from this lanegroup
-            self.waiting_queue.remove_lead_vehicle()
+            # # remove vehicle from this lanegroup
+            # self.waiting_queue.remove_lead_vehicle()
 
             # inform flow accumulators
             # self.update_flow_accummulators(vehicle.get_state(),1.0)

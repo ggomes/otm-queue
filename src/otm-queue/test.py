@@ -4,8 +4,6 @@ import matplotlib.pyplot as plt
 from core import Scenario
 import heapq
 
-
-
 class MyTestCase(unittest.TestCase):
 
     def test_load_and_run(self) -> None:

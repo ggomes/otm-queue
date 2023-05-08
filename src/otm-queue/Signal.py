@@ -67,9 +67,11 @@ class ActuatorSignal(AbstractActuator):
     #         p.initialize()
 
     def register_with_targets(self) -> None:
+        lgs = set()
         for signal_phase in self.signal_phases.values():
-            for lg in signal_phase.lanegroups:
-                lg.register_signal(self)
+            lgs = lgs.union(frozenset(signal_phase.lanegroups))
+        for lg in lgs:
+            lg.register_signal()
 
     def process_command(self, timestamp: float,dispatcher:'Dispatcher') -> None:
 

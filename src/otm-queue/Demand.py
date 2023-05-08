@@ -54,7 +54,7 @@ class Demand:
             dispatcher.register_event(EventCreateVehicle(dispatcher, now + wait_time, self))
             self.vehicle_scheduled = True
 
-    def insert_vehicle(self,timestamp:float,dispatcher:Dispatcher ) -> None:
+    def insert_vehicle(self,dispatcher:Dispatcher ) -> None:
 
         # create a vehicle
         vehicle = Vehicle(self.vtype)

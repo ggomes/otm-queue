@@ -134,7 +134,6 @@ class Network:
 
             if len(lane_sets)==0:
                 lanegroups.append(LaneGroup(link=link,
-                                            length=link.length,
                                             num_lanes=link.full_lanes,
                                             start_lane=1,
                                             rp=link.roadparam,
@@ -157,7 +156,6 @@ class Network:
                 lg_start_lane = lanes_in_lg[0]
                 lg_num_lanes = lanes_in_lg.shape[0]
                 lanegroup = LaneGroup(link=link,
-                                      length=link.length,
                                       num_lanes=lg_num_lanes,
                                       start_lane=lg_start_lane,
                                       rp=link.roadparam,
@@ -168,18 +166,6 @@ class Network:
             link.set_lanegroups(lanegroups)
 
 
-        # populate link.nextlink2lanegroups
-        for link in self.links.values():
-            if not link.is_sink:
-                exiting_rcs = [rc for rc in self.roadconn.values() if rc.in_link==link.id]
-                if len(exiting_rcs)==0:
-                    nextlink = next(iter(link.endnode.out_links.values()))
-                    link.nextlink2lanegroups[nextlink.id] = nextlink.lgs
-                else:
-                    for rc in exiting_rcs:
-                        nextlinkid = rc.out_link
-                        nextlink = self.links[nextlinkid]
-                        link.nextlink2lanegroups[nextlinkid]  = nextlink.lgs
 
 class Scenario:
     dispatcher : "Dispatcher"
@@ -210,7 +196,6 @@ class Scenario:
         self.network = Network(scnjson['network'])
 
         # make road connection to incoming lanegroup map
-        # This is very early, considering that only lane group actuators need it
         rc2inlgs = dict()
         for rc in self.network.roadconn.values():
             in_link = self.network.links[rc.in_link]
@@ -218,6 +203,18 @@ class Scenario:
             rc2inlgs[rc.id] = [lg for lg in in_link.lgs if
                              (lg.start_lane >= lanes[0]) and
                              (lg.start_lane+lg.num_lanes -1 <= lanes[1]) ]
+
+
+        # populate link.nextlink2mylgs
+        for link in self.network.links.values():
+            if not link.is_sink:
+                exiting_rcs = [rc for rc in self.network.roadconn.values() if rc.in_link==link.id]
+                if len(exiting_rcs)==0:
+                    for nextlink in link.endnode.out_links.values():
+                        link.nextlink2mylgs[nextlink.id] = link.lgs
+                else:
+                    for rc in exiting_rcs:
+                        link.nextlink2mylgs[rc.out_link]  = rc2inlgs[rc.id]
 
         # read demands
         self.demands = dict()

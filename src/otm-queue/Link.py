@@ -24,7 +24,7 @@ class Link:
     lgs: list['LaneGroup']
     is_source: bool
     is_sink: bool
-    nextlink2lanegroups: dict[int, list['LaneGroup']]
+    nextlink2mylgs: dict[int, list['LaneGroup']]
 
     def __init__(self,network,linkid:int,jsonlink:dict,roadparam:dict) -> None:
 
@@ -48,8 +48,8 @@ class Link:
         # Probably don't need it
         # dnlane2lanegroup : dict[int,LaneGroup] = dict()
 
-        # outlink -> lanegroups from which outlink is reachable
-        self.nextlink2lanegroups = dict()
+        # nextlink -> lanegroups in this link from which nextlink is reachable
+        self.nextlink2mylgs = dict()
 
         # control flows to downstream links
         # unique_acts_flowToLinks : set[ActuatorFlowToLinks]
@@ -94,33 +94,35 @@ class Link:
         for d in self.demands:
             d.initialize(scenario.dispatcher)
 
-    def sample_next_link(self,vtid:int) -> int:
+    def sample_next_link(self,vtid:int) -> Optional[int]:
+        if self.is_sink:
+            return None
         if len(self.split_profile)>0:
             return self.split_profile[vtid].sample_output_link()
         else:
             return random.choice(list(self.endnode.out_links.keys()))
 
     def get_lanegroups_for_nextlink(self, next_link:int) -> list['LaneGroup']:
-        if len(self.nextlink2lanegroups)>0:
-            return self.nextlink2lanegroups[next_link]
+        if len(self.nextlink2mylgs)>0:
+            return self.nextlink2mylgs[next_link]
         else:
             return self.lgs
 
     def argmax_supply(self, candidate_lanegroups: list['LaneGroup']) -> 'LaneGroup':
+        if len(candidate_lanegroups)==1:
+            return candidate_lanegroups[0]
         ind = np.argmax([lg.get_supply_per_lane() for lg in candidate_lanegroups])
         return candidate_lanegroups[ind]
 
-    def add_vehicle(self,vehicle:'Vehicle',dispatcher:'Dispatcher',joinlg:Optional['LaneGroup']):
+    def add_vehicle(self,vehicle:'Vehicle',dispatcher:'Dispatcher',joinlg:Optional['LaneGroup']=None):
 
         # sample its next link
         next_link_id = self.sample_next_link(vehicle.vtype.id)
         vehicle.next_link_id = next_link_id
 
-        # candidate lane groups
-        candidate_lane_groups:list[LaneGroup] = self.get_lanegroups_for_nextlink(vehicle.next_link_id)
-
-        # pick from among the eligible lane groups
+        # pick from among the eligible lane groups, unless joinlg is already given
         if joinlg is None:
+            candidate_lane_groups: list[LaneGroup] = self.get_lanegroups_for_nextlink(vehicle.next_link_id)
             joinlg = self.argmax_supply(candidate_lane_groups)
 
         # add to joinlanegroup
