@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 import json
 import os
 from SimpleClasses import VehicleType, RoadConnection
@@ -236,6 +236,9 @@ class Scenario:
                 name=val['name'],
                 pathfull=bool(val['pathfull'])
             )
+
+        # read network
+        self.network = Network(scnjson['network'])
 
         # read demands
         self.demands = dict()

@@ -1,11 +1,11 @@
 from queue import PriorityQueue
 from typing import TYPE_CHECKING
 from abstract import AbstractEvent
+import heapq
 
 if TYPE_CHECKING:
     from Demand import Demand
     from Splits import Link2Split
-
 
 class EventDemandChange(AbstractEvent):
     demand_vps:float
@@ -44,7 +44,7 @@ class EventCreateVehicle(AbstractEvent):
 
     def action(self) -> None:
         demand = self.recipient
-        demand.insert_vehicle(self.timestamp,self.dispatcher)
+        demand.insert_vehicle(self.dispatcher)
         demand.schedule_next_vehicle(self.dispatcher)
 
 class EventTransitToWaiting(AbstractEvent):
@@ -66,15 +66,15 @@ class EventTransitToWaiting(AbstractEvent):
         #     for ev in vehicle.get_event_listeners():
         #         ev.move_from_to_queue(self.timestamp,vehicle,vehicle.my_queue,lanegroup.waiting_queue)
 
-        vehicle.move_to_queue(self.timestamp,lanegroup,lanegroup.waiting_queue)
+        vehicle.move_to_queue(lanegroup,lanegroup.waiting_queue)
 
-class EventReleaseVehicleFromLaneGroup(AbstractEvent):
+class EventSeviceLanegroupWaitingQueue(AbstractEvent):
 
     def __init__(self,dispatcher,timestamp:float, obj) -> None:
         super().__init__(dispatcher,45,timestamp,obj)
 
     def action(self) -> None:
-        self.recipient.release_vehicle(self.timestamp)
+        self.recipient.service_waiting_queue(self.dispatcher)
 
 class EventStopSimulation(AbstractEvent):
 
@@ -88,11 +88,11 @@ class EventStopSimulation(AbstractEvent):
 class Dispatcher:
     current_time: float
     stop_time: float
-    events: PriorityQueue
+    events: list[tuple[float,int,AbstractEvent]]
     continue_simulation: bool
 
     def __init__(self) -> None:
-        self.events = PriorityQueue()
+        self.events = list()
 
     def initialize(self) -> None:
         self.current_time = 0
@@ -103,17 +103,18 @@ class Dispatcher:
         self.clear_events()
 
     def clear_events(self) -> None:
-        self.events.queue.clear()
+        self.events = list()
 
     def register_event(self,event:AbstractEvent) -> None:
         if event.timestamp<self.current_time:
             return
-        self.events.put((event.timestamp,event))
+        heapq.heappush(self.events,(event.timestamp,event.dispatch_order,event))
+
+    def remove_events_for_recipient(self,clazz,recipient) -> None:
+        self.events = [e for e in self.events if (not isinstance(e[2],clazz)) or (e[2].recipient is not recipient)]
 
     def dispatch_all_events(self) -> None:
-        while self.events.qsize()>0:
-            timestamp, event = self.events.get()
+        while len(self.events)>0:
+            timestamp, dispatchorder, event = heapq.heappop(self.events)
             self.current_time = timestamp
-            print(event)
             event.action()
-        print('done')

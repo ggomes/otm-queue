@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 import numpy as np
 from Events import Dispatcher, EventDemandChange, EventCreateVehicle
-from static import get_waiting_time
+from static import get_service_period
 from Vehicle import Vehicle
 
 if TYPE_CHECKING:
@@ -39,7 +39,7 @@ class Demand:
         dispatcher.register_event(EventDemandChange(dispatcher, 0,self, self.profile[0]))
 
     def set_current_demand_vps(self, dispatcher:Dispatcher, value:float) -> None:
-        self.current_demand_vps = value
+        self.current_demand_vps = value / 3600.0
         if value>0:
             self.schedule_next_vehicle(dispatcher)
 
@@ -49,28 +49,18 @@ class Demand:
             return
 
         now = dispatcher.current_time
-        wait_time = get_waiting_time(self.current_demand_vps)
+        wait_time = get_service_period(self.current_demand_vps)
         if wait_time is not None:
             dispatcher.register_event(EventCreateVehicle(dispatcher, now + wait_time, self))
             self.vehicle_scheduled = True
 
-    def insert_vehicle(self,timestamp:float,dispatcher:Dispatcher ) -> None:
+    def insert_vehicle(self,dispatcher:Dispatcher ) -> None:
 
         # create a vehicle
         vehicle = Vehicle(self.vtype)
 
-        # sample its next link
-        next_link = self.link.sample_next_link(self.vtype.id)
-
-        # candidate lane groups
-        candidate_lane_groups:list[LaneGroup] = self.link.get_lanegroups_for_outlink(next_link)
-
-        # pick from among the eligible lane groups
-        join_lanegroup:LaneGroup = self.link.argmax_supply(candidate_lane_groups)
-            # .keySet().iterator().next()
-
-        # package and add to joinlanegroup
-        join_lanegroup.add_vehicle(timestamp,vehicle,dispatcher)
+        # add vehicle to link
+        self.link.add_vehicle(vehicle,dispatcher)
 
         # this scheduled vehicle has been created
         self.vehicle_scheduled = False

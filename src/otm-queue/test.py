@@ -34,25 +34,3 @@ class MyTestCase(unittest.TestCase):
             print(e)
 
         self.assertTrue(True)
-
-    def test_priority_queue(self) -> None:
-
-        from queue import PriorityQueue
-
-        q:PriorityQueue = PriorityQueue()
-        q.put(10)
-        q.put(1)
-        q.put(5)
-        while not q.empty():
-            print(q.get())
-        self.assertTrue(True)
-
-    def test_random_choice(self) -> None:
-        N = 100
-        A = np.empty(N)
-        for i in range(N):
-            A[i] = np.random.choice([0,1,-5,10,8], p=[0.1, 0, 0.3, 0.6, 0])
-
-        # plt.figure()
-        # plt.hist(A)
-        # plt.show()
