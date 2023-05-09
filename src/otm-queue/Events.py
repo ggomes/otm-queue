@@ -1,4 +1,3 @@
-from queue import PriorityQueue
 from typing import TYPE_CHECKING
 from abstract import AbstractEvent
 import heapq
@@ -60,11 +59,6 @@ class EventTransitToWaiting(AbstractEvent):
 
         if next_link is None:
             vehicle.waiting_for_lane_change=False
-
-        # inform listeners
-        # if vehicle.get_event_listeners() is not None:
-        #     for ev in vehicle.get_event_listeners():
-        #         ev.move_from_to_queue(self.timestamp,vehicle,vehicle.my_queue,lanegroup.waiting_queue)
 
         vehicle.move_to_queue(lanegroup,lanegroup.waiting_queue)
 

@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING, Optional
 import json
-import os
 from SimpleClasses import VehicleType, RoadConnection
 from Link import Link
 from Demand import Demand
@@ -11,7 +10,6 @@ from LaneGroup import LaneGroup
 import numpy as np
 from Events import Dispatcher, EventStopSimulation
 from Output import *
-
 if TYPE_CHECKING:
     from abstract import *
 
@@ -24,22 +22,13 @@ class Node:
     is_sink: bool
     is_many2one: bool
 
-    signal:ActuatorSignal
-
     def __init__(self,myid:int):
         self.id = myid
         self.in_links = dict()
         self.out_links = dict()
-        self.road_connections = dict()
         self.is_source = True
         self.is_sink = True
         self.is_many2one = False
-
-    def register_actuator(self,act:"ActuatorSignal"):
-        self.signal = act
-
-    def add_road_connection(self,rc:"RoadConnection") -> None:
-        self.road_connections[rc.id] = rc
 
     def add_input_link(self,link:"Link") -> None:
         self.in_links[link.id] = link
@@ -53,6 +42,7 @@ class Network:
 
     nodes: dict[int,Node]
     links: dict[int,"Link"]
+    roadconn: dict[int,RoadConnection]
 
     def __init__(self,netjson:dict[str,dict]) -> None:
 
@@ -94,7 +84,8 @@ class Network:
                     link.is_sink = True
 
         # read road connections
-        roadconn = dict()
+
+        self.roadconn = dict()
         for strid, roadconnjson in netjson['roadconnections'].items():
 
             in_link_id = int(roadconnjson['in_link'])
@@ -112,10 +103,7 @@ class Network:
                 in_link_lanes=in_link_lanes,
                 out_link=int(roadconnjson['out_link']))
 
-            roadconn[rc.id] = rc
-
-            # add road connections to nodes
-            in_link.endnode.add_road_connection(rc)
+            self.roadconn[rc.id] = rc
 
         # Create lane groups .....................................
         for link in self.links.values():
@@ -123,7 +111,7 @@ class Network:
             lanegroups = list()
 
             # collect outgoing road connections
-            out_rcs = [rc for rc in link.endnode.road_connections.values() if rc.in_link==link.id]
+            out_rcs = [rc for rc in self.roadconn.values() if rc.in_link==link.id]
 
             # if len(out_rcs)==0 and (not link.is_sink):
             #     raise(Exception("len(out_rcs)==0 and (not link.is_sink)"))
@@ -138,7 +126,6 @@ class Network:
 
             if len(lane_sets)==0:
                 lanegroups.append(LaneGroup(link=link,
-                                            length=link.length,
                                             num_lanes=link.full_lanes,
                                             start_lane=1,
                                             rp=link.roadparam,
@@ -161,43 +148,14 @@ class Network:
                 lg_start_lane = lanes_in_lg[0]
                 lg_num_lanes = lanes_in_lg.shape[0]
                 lanegroup = LaneGroup(link=link,
-                                      length=link.length,
                                       num_lanes=lg_num_lanes,
                                       start_lane=lg_start_lane,
                                       rp=link.roadparam,
-                                      out_rcs=[roadconn[rcid] for rcid in myrcs])
+                                      out_rcs=[self.roadconn[rcid] for rcid in myrcs])
 
                 lanegroups.append(lanegroup)
 
             link.set_lanegroups(lanegroups)
-
-
-            # # populate rc.out_lanegroups
-            # for rc in link.start_node.road_connections:
-            #     if rc.end_link==link:
-            #         rc.out_lanegroups.clear()
-            #         for (int lane = rc.get_end_link_from_lane(); lane <= rc.get_end_link_to_lane(); lane++)
-            #             rc.out_lanegroups.add(link.get_lanegroup_for_up_lane(lane));
-
-
-            # populate link.outlink2lanegroups
-            if not link.is_sink:
-                link.outlink2lanegroups = dict()
-                for outlink in link.endnode.out_links.keys():
-                    lgs = [lg for lg in link.lgs if outlink in lg.outlink2roadconnection.keys()]
-                    if len(lgs)>0:
-                        link.outlink2lanegroups[outlink] = lgs
-
-            # # create vehicle sources
-            # if scenario.demands.containsKey(link.getId()):
-            #     link.demandGenerators = new HashSet<>();
-            #     for(DemandInfo demandinfo : scenario.demands.get(link.getId())){
-            #         AbstractDemandGenerator source = create_source(
-            #                 link,
-            #                 demandinfo.profile,
-            #                 scenario.commodities.get(demandinfo.commid),
-            #                 demandinfo.pathid==null?null : (Path)scenario.subnetworks.get(demandinfo.pathid));
-            #         link.demandGenerators.add(source);
 
 class Scenario:
     dispatcher : "Dispatcher"
@@ -224,6 +182,28 @@ class Scenario:
             jsonobj = json.load(f)
         self.network = Network(jsonobj)
 
+
+        # make road connection to incoming lanegroup map
+        rc2inlgs = dict()
+        for rc in self.network.roadconn.values():
+            in_link = self.network.links[rc.in_link]
+            lanes = rc.in_link_lanes
+            rc2inlgs[rc.id] = [lg for lg in in_link.lgs if
+                             (lg.start_lane >= lanes[0]) and
+                             (lg.start_lane+lg.num_lanes -1 <= lanes[1]) ]
+
+
+        # populate link.nextlink2mylgs
+        for link in self.network.links.values():
+            if not link.is_sink:
+                exiting_rcs = [rc for rc in self.network.roadconn.values() if rc.in_link==link.id]
+                if len(exiting_rcs)==0:
+                    for nextlink in link.endnode.out_links.values():
+                        link.nextlink2mylgs[nextlink.id] = link.lgs
+                else:
+                    for rc in exiting_rcs:
+                        link.nextlink2mylgs[rc.out_link]  = rc2inlgs[rc.id]
+
         with open(demand_file) as f:
             jsonobj = json.load(f)
 
@@ -236,9 +216,6 @@ class Scenario:
                 name=val['name'],
                 pathfull=bool(val['pathfull'])
             )
-
-        # read network
-        self.network = Network(scnjson['network'])
 
         # read demands
         self.demands = dict()
@@ -268,7 +245,7 @@ class Scenario:
             actid = int(strid)
             acttype = jsonact['type']
             if acttype=='signal':
-                self.actuators[actid] = ActuatorSignal(actid,self,jsonact)
+                self.actuators[actid] = ActuatorSignal(actid,self,jsonact,rc2inlgs)
             else:
                 raise(Exception("Error: Unknown actuator type {acttype}"))
 
@@ -327,15 +304,19 @@ class Scenario:
         return True
 
     def get_lanegroups(self) -> None:
+        # TODO Implement this
         pass
 
     def set_state(self,state) -> None:
+        # TODO Implement this
         pass
 
     def get_state(self) -> dict:
+        # TODO Implement this
         pass
 
     def set_controller_command(self,command) -> None:
+        # TODO Implement this
         pass
 
     def run(self,duration):
@@ -344,11 +325,6 @@ class Scenario:
         now = self.dispatcher.current_time
         self.dispatcher.stop_time = now+duration
         self.dispatcher.register_event(EventStopSimulation(self.dispatcher,now+duration,self))
-
-        # register scenario events
-        # for e in self.events:
-        #     if (e.timestamp>=now) and (e.timestamp<now+duration):
-        #         self.dispatcher.register_event(e)
 
         # process all events
         self.dispatcher.dispatch_all_events()

@@ -8,7 +8,7 @@
         {"phase":"2", "roadconnections":"25"},
         {"phase":"4", "roadconnections":"41,47,45"},
         {"phase":"1", "roadconnections":"63"},
-        {"phase":"6", "roadconnection_ids":"61"},
+        {"phase":"6", "roadconnections":"61"},
         {"phase":"8", "roadconnections":"81,83,85"}
       ]
     } 

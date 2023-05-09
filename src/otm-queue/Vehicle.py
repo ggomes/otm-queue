@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from LaneGroup import VehicleQueue
     from SimpleClasses import VehicleType
-    from Events import EventSeviceLanegroupWaitingQueue
 
 class Vehicle:
 
@@ -14,9 +13,6 @@ class Vehicle:
     my_queue:'VehicleQueue'
     lg:'LaneGroup'
 
-    # dispatch listeners
-    # listener : VehicleListener
-
     def __init__(self, vtype:'VehicleType') -> None :
         self.id = get_vehicle_id()
         self.vtype = vtype
@@ -24,13 +20,6 @@ class Vehicle:
         self.my_queue = None
         self.lg = None
         self.release_event = None
-        # self.listener = listener
-
-
-    # def get_next_link_id(self) -> int:
-    #     if self.lg.link.is_sink:
-    #         return -1
-    #     return self.next_link_id
 
     def move_to_queue(self,to_lg:'LaneGroup',to_queue:'VehicleQueue') -> None:
 

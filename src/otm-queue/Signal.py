@@ -31,9 +31,6 @@ class SignalPhase:
         for rcid in rcids:
             self.lanegroups = self.lanegroups.union(set(rc2inlgs[rcid]))
 
-    # def initialize(self)-> None:
-    #     self.bulbcolor = BulbColor.DARK
-
     def set_bulb_color(self,to_color:BulbColor,dispatcher:'Dispatcher') -> None:
 
         # set the state
@@ -61,10 +58,6 @@ class ActuatorSignal(AbstractActuator):
         for jsonphase in jsonact['signal']:
             phaseid = int(jsonphase['phase'])
             self.signal_phases[phaseid] = SignalPhase(scenario, self, jsonphase, rc2inlgs)
-
-    # def initialize(self) -> None:
-    #     for p in self.signal_phases.values():
-    #         p.initialize()
 
     def register_with_targets(self) -> None:
         lgs = set()

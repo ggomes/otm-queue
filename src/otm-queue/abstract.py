@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING,Optional, Any
-import os
 if TYPE_CHECKING:
     from core import Scenario
     from Events import Dispatcher
@@ -121,10 +120,6 @@ class AbstractController(ABC):
             act.command = self.command.get(act.id)
             if act.dt is None:
                 act.poke(dispatcher,timestamp)
-
-        # write to output
-        # if event_output is not None:
-        #     event_output.write(EventWrapperController(timestamp, command))
 
         # wake up in dt, if dt is defined
         if (self.dt is not None) and (self.dt > 0):

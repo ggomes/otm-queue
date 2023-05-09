@@ -8,7 +8,6 @@ import numpy as np
 if TYPE_CHECKING:
     from core import Link
     from Vehicle import Vehicle
-    from Signal import ActuatorSignal
     from SimpleClasses import RoadConnection, RoadParams
     from Events import Dispatcher
 
@@ -41,7 +40,6 @@ class VehicleQueue:
 
 class LaneGroup:
 
-
     link : "Link"
     num_lanes : int
     start_lane: int
@@ -56,8 +54,6 @@ class LaneGroup:
     actuator : bool
     transit_queue: VehicleQueue
     waiting_queue: VehicleQueue
-
-    # flw_acc : FlowAccumulatorState # flow accumulator
 
     def __init__(self,link:"Link", num_lanes:int , start_lane:int, rp:'RoadParams' , out_rcs:Optional[list['RoadConnection']] = None ) -> None:
 
@@ -101,9 +97,6 @@ class LaneGroup:
     def get_supply_per_lane(self) -> float:
         return self.longitudinal_supply / self.num_lanes
 
-    # def get_waiting_supply(self,) -> float:
-    #     return self.waiting_queue.lanegroup.get_long_supply()
-
     def set_actuator_capacity_vps(self,rate_vps:float,dispatcher:'Dispatcher') -> None:
         if rate_vps<0:
             return
@@ -112,15 +105,7 @@ class LaneGroup:
         # Recompute exit times for all vehicles in the waiting queue
         self.reset_exit_times(dispatcher)
 
-    # def set_to_nominal_capacity(self) -> None:
-    #     self.saturation_flow_rate_vps = self.nom_saturation_flow_rate_vps
-    #     self.reset_exit_times()
-
     def reset_exit_times(self,dispatcher:'Dispatcher')->None:
-        # NEED TO IMPLEMENT THIS
-        # ITERATE THROUGH VEHICLES IN THE WAITING QUEUE
-        # FOR EACH ONE GET THE RELEASE EVENT FROM THE DISPATCHER
-        # REMOVE IT AND PUT IN ANOTHER ONE WITH UPDATED EXIT TIME
         now = dispatcher.current_time
         dispatcher.remove_events_for_recipient(EventSeviceLanegroupWaitingQueue,self)
 
@@ -131,27 +116,10 @@ class LaneGroup:
         next_release = now + get_service_period(self.saturation_flow_rate_vps)
         dispatcher.register_event(EventSeviceLanegroupWaitingQueue(dispatcher,next_release,self))
 
-
-    # def get_upstream_vehicle_position(self) -> float:
-    #     return self.longitudinal_supply * self.length / self.max_vehicles
-
-     # * A vehicle arrives at this lanegroup.
-     # * Vehicles do not know their next_link. It is assumed that the vehicle fits in this lanegroup.
-     # * 2. tag it with next_link and target lanegroups.
-     # * 3. add the core.packet to this lanegroup.
     def add_vehicle(self, veh:'Vehicle',dispatcher:'Dispatcher') -> None:
-
-        # tell the event listeners
-        # if veh.get_event_listeners() is not None:
-        #     for ev in veh.get_event_listeners():
-        #         ev.move_from_to_queue(timestamp,veh,veh.my_queue,self.transit_queue)
 
         # tell the vehicle it has moved
         veh.move_to_queue(self,self.transit_queue)
-
-        # tell the travel timers
-        # if travel_timer is not None:
-        #     self.travel_timer.vehicle_enter(timestamp,veh)
 
         # dispatch to go to waiting queue
         now = dispatcher.current_time
@@ -159,15 +127,6 @@ class LaneGroup:
 
         self.update_long_supply()
 
-    # /**
-    #  * An event signals an opportunity to release a vehicle. The lanegroup must,
-    #  * 1. construct packets to be released to each of the lanegroups reached by each of it's
-    #  *    road connections.
-    #  * 2. check what portion of each of these packets will be accepted. Reduce the packets
-    #  *    if necessary.
-    #  * 3. call add_vehicle_packet for each reduces core.packet.
-    #  * 4. remove the vehicle packets from this lanegroup.
-    #  */
     def service_waiting_queue(self, dispatcher:'Dispatcher') -> None:
 
         # schedule the next vehicle release dispatch
@@ -193,16 +152,6 @@ class LaneGroup:
                 nextlg_supply = nextlgs_supply[nextlg_ind]
 
         if nextlg_supply >= 1:
-
-            # # remove vehicle from this lanegroup
-            # self.waiting_queue.remove_lead_vehicle()
-
-            # inform flow accumulators
-            # self.update_flow_accummulators(vehicle.get_state(),1.0)
-
-            # inform the travel timers
-            # if self.travel_timer is not None:
-            #     self.travel_timer.vehicle_exit(timestamp,vehicle,self.link.getId(),next_link)
 
             # send vehicle to next link
             if not self.link.is_sink:
@@ -232,16 +181,3 @@ class LaneGroup:
             return self.__key() == other.__key()
         return NotImplemented
 
-    # public final FlowAccumulatorState request_flow_accumulator(Set<Long> comm_ids){
-    #     if(flw_acc==null)
-    #         flw_acc = new FlowAccumulatorState();
-    #     for(State state : link.states)
-    #         if(comm_ids==null || comm_ids.contains(state.commodity_id))
-    #             flw_acc.add_state(state);
-    #     return flw_acc;
-    # }
-
-    # public final void update_flow_accummulators(State state, double num_vehicles){
-    #     if(flw_acc!=null)
-    #         flw_acc.increment(state,num_vehicles);
-    # }
