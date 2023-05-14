@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from core import Scenario
 import os
 import pandas as pd
+import numpy as np
 
 class MyTestCase(unittest.TestCase):
 
@@ -25,9 +26,17 @@ class MyTestCase(unittest.TestCase):
             check=True
         )
 
-        scenario.get_lanegroups()
-        scenario.set_state({})
-        scenario.run(duration=1000)
+        lg_ids = scenario.get_lanegroup_ids()
+
+        scenario.reset()
+
+        scenario.set_vehicles()
+
+        scenario.advance(duration=1000)
+
+    def run_write_output(self) -> None:
+        pass
+
 
     def test_plot(self) -> None:
 

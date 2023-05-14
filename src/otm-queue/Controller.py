@@ -23,8 +23,6 @@ class Stage:
         self.duration = float(jsonstage['duration'])
         self.phase_ids = {int(s) for s in jsonstage['phases'].split(',')}
 
-
-
 class ControllerStage(AbstractController):
 
     cycle: float
@@ -62,10 +60,11 @@ class ControllerStage(AbstractController):
 
     def initialize(self,scenario) -> None:
         super().initialize(scenario)
-        # self.signal.initialize()
+
+    def reset(self) -> None:
+        pass
 
     def update_command(self, dispatcher) -> None:
-
         now = dispatcher.current_time
         x = self.get_stage_for_time(now)   # StageindexReltime
 

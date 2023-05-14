@@ -1,5 +1,4 @@
 from typing import TYPE_CHECKING
-from typing import Optional
 from Events import EventSeviceLanegroupWaitingQueue, EventTransitToWaiting
 from collections import deque
 from static import get_service_period
@@ -8,18 +7,16 @@ import numpy as np
 if TYPE_CHECKING:
     from core import Link
     from Vehicle import Vehicle
-    from SimpleClasses import RoadConnection, RoadParams
+    from SimpleClasses import RoadParams
     from Events import Dispatcher
 
 class VehicleQueue:
     typestr:str
     queue:deque
-    # lg:'LaneGroup'
 
     def __init__(self,typestr:str):
         self.typestr = typestr
         self.queue = deque()
-        # self.lg = lg
 
     def clear(self) -> None:
         self.queue = deque()
@@ -31,8 +28,6 @@ class VehicleQueue:
         self.queue.append(v)
 
     def remove_lead_vehicle(self) -> None:
-        if len(self.queue) == 0:
-            print("What?")
         self.queue.popleft()
 
     def get_lead_vehicle(self) -> 'Vehicle':
@@ -55,7 +50,7 @@ class LaneGroup:
     transit_queue: VehicleQueue
     waiting_queue: VehicleQueue
 
-    def __init__(self,link:"Link", num_lanes:int , start_lane:int, rp:'RoadParams' , out_rcs:Optional[list['RoadConnection']] = None ) -> None:
+    def __init__(self,link:"Link", num_lanes:int , start_lane:int, rp:'RoadParams') -> None:
 
         self.link = link
         self.num_lanes = num_lanes
@@ -73,6 +68,9 @@ class LaneGroup:
         self.transit_queue = VehicleQueue('transit')
         self.waiting_queue = VehicleQueue('waiting')
 
+    def get_id(self):
+        return self.link.id, self.start_lane
+
     def register_signal(self):
         if self.has_actuator:
             raise(Exception("Lanegroup is assigned multiple actuators"))
@@ -87,6 +85,26 @@ class LaneGroup:
         self.schedule_service_waiting_queue(scenario.dispatcher)
 
         self.update_long_supply()
+
+    def clear(self) -> None:
+        self.transit_queue.clear()
+        self.waiting_queue.clear()
+
+    def set_transit_vehicles(self,num_veh:int) -> None:
+        if num_veh>self.max_vehicles:
+            raise(Exception("Setting more than the maximum number of vehicles"))
+        # TODO FINISH THIS
+        # Generate num_veh vehicles.
+        # Sample next link, etc.
+        # put them into the transit queue
+
+    def set_waiting_vehicles(self, num_veh: int) -> None:
+        if num_veh > self.max_vehicles:
+            raise (Exception("Setting more than the maximum number of vehicles"))
+        # TODO FINISH THIS
+        # Generate num_veh vehicles.
+        # Sample next link, etc.
+        # put them into the waiting queue
 
     def update_long_supply(self) -> None:
         self.longitudinal_supply =  self.max_vehicles - self.get_total_vehicles()
@@ -167,8 +185,7 @@ class LaneGroup:
             dispatcher.register_event(EventSeviceLanegroupWaitingQueue(dispatcher, timestamp, self))
 
     def __str__(self) -> str:
-        return "lg link {}, lanes {}-{}".format(self.link.id, self.start_lane,
-                                                self.start_lane + self.num_lanes - 1)
+        return "({},{})".format(self.link.id, self.start_lane)
 
     def __key(self):
         return (self.link.id, self.start_lane)

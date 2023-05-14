@@ -6,6 +6,15 @@ if TYPE_CHECKING:
     from Demand import Demand
     from Splits import Link2Split
 
+'''
+Event prioties:
+0: EventDemandChange
+1: EventSplitChange
+40: EventCreateVehicle
+44: EventTransitToWaiting
+45: EventSeviceLanegroupWaitingQueue
+'''
+
 class EventDemandChange(AbstractEvent):
     demand_vps:float
     demand:'Demand'
@@ -24,7 +33,7 @@ class EventSplitChange(AbstractEvent):
     outlink2value: 'Link2Split'
 
     def __init__(self,dispatcher,timestamp:float, splitProfile, outlink2value:'Link2Split') -> None:
-        super().__init__(dispatcher=dispatcher,dispatch_order=0,timestamp=timestamp,recipient=splitProfile)
+        super().__init__(dispatcher=dispatcher,dispatch_order=1,timestamp=timestamp,recipient=splitProfile)
         self.outlink2value = outlink2value
 
     def action(self):
@@ -70,28 +79,13 @@ class EventSeviceLanegroupWaitingQueue(AbstractEvent):
     def action(self) -> None:
         self.recipient.service_waiting_queue(self.dispatcher)
 
-class EventStopSimulation(AbstractEvent):
-
-    def __init__(self , dispatcher, timestamp:float,scenario ) -> None:
-        super().__init__(dispatcher, 10, timestamp, scenario)
-
-    def action(self) -> None:
-        self.dispatcher.stop()
-        self.recipient.close_outputs()
-
 class Dispatcher:
-    current_time: float
-    stop_time: float
     events: list[tuple[float,int,AbstractEvent]]
-    continue_simulation: bool
+    current_time: float
 
     def __init__(self) -> None:
         self.events = list()
-
-    def initialize(self) -> None:
-        self.current_time = 0
-        self.clear_events()
-        self.continue_simulation = True
+        self.current_time = 0.0
 
     def stop(self) -> None:
         self.clear_events()
@@ -107,8 +101,8 @@ class Dispatcher:
     def remove_events_for_recipient(self,clazz,recipient) -> None:
         self.events = [e for e in self.events if (not isinstance(e[2],clazz)) or (e[2].recipient is not recipient)]
 
-    def dispatch_all_events(self) -> None:
-        while len(self.events)>0:
+    def dispatch_to_time(self,stop_time:float) -> None:
+        while len(self.events)>0 and self.current_time<=stop_time:
             timestamp, dispatchorder, event = heapq.heappop(self.events)
             self.current_time = timestamp
             event.action()

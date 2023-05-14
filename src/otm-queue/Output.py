@@ -29,7 +29,7 @@ class OutputLinkVeh(AbstractOutputTimed):
         return 'time,'+','.join([str(link.id) for link in self.scenario.network.links.values()])
 
     def get_str(self) -> str:
-        return ','.join([str(link.get_total_vehicles()) for link in self.scenario.network.links.values()])
+        return ','.join([str(link.get_num_vehicles()) for link in self.scenario.network.links.values()])
 
 class OutputLanegroupFlow(AbstractOutputTimed):
 

@@ -24,6 +24,8 @@ class Link:
     lgs: list['LaneGroup']
     is_source: bool
     is_sink: bool
+
+    # nextlink -> lanegroups in this link from which nextlink is reachable
     nextlink2mylgs: dict[int, list['LaneGroup']]
 
     def __init__(self,network,linkid:int,jsonlink:dict,roadparam:dict) -> None:
@@ -43,50 +45,12 @@ class Link:
         self.lgs = list()
         self.is_source = False
         self.is_sink = False
-
-        # downstream lane count -> lane group
-        # Probably don't need it
-        # dnlane2lanegroup : dict[int,LaneGroup] = dict()
-
-        # nextlink -> lanegroups in this link from which nextlink is reachable
         self.nextlink2mylgs = dict()
-
-        # control flows to downstream links
-        # unique_acts_flowToLinks : set[ActuatorFlowToLinks]
-        # acts_flowToLinks dict[int,dict[int,ActuatorFlowToLinks] = dict() # road connection->commodity->actuator
-
-        # demands ............................................
-        # demandGenerators : set[AbstractDemandGenerator]
-
-        # travel timer
-        # link_tt : LinkTravelTimer
-
-    def add_demand(self,demand:Demand) -> None:
-        self.demands.append(demand)
-
-    def set_lanegroups(self,newlgs: list['LaneGroup'] ) -> None:
-        self.lgs = newlgs
-        # dnlane2lanegroup = dict()
-        # for lg in self.lgs:
-        #     for lane in range(lg.start_lane_dn,lg.start_lane_dn+lg.num_lanes):
-        #         dnlane2lanegroup[lane] = lg
 
     def initialize(self,scenario:'Scenario') -> None:
 
         for lg in self.lgs:
             lg.initialize(scenario)
-
-        # from outlinks, remove ones without splits or actuators (unnecessary)
-        # Set<Long> pathless_comms = states.stream().filter(s->!s.isPath).map(s->s.commodity_id).collect(toSet());
-        # for(Long commid : pathless_comms){
-        #     Set<Long> outlinks = new HashSet<>();
-        #     outlinks.addAll(this.outlink2lanegroups.keySet());
-        #     if(split_profile!=null && split_profile.containsKey(commid)) {
-        #         SplitMatrixProfile smp = split_profile.get(commid);
-        #         if(smp.get_splits()!=null)
-        #             outlinks.removeAll(smp.get_splits().values.keySet());
-        #     }
-        # }
 
         for sp in self.split_profile.values():
             sp.initialize(scenario.dispatcher)
@@ -101,6 +65,13 @@ class Link:
             return self.split_profile[vtid].sample_output_link()
         else:
             return random.choice(list(self.endnode.out_links.keys()))
+
+    def get_lanegroup_for_startlane(self,startlane:int) -> Optional['LaneGroup']:
+        v = [lg for lg in self.lgs if lg.start_lane==startlane]
+        if len(v)>0:
+            return v[0]
+        else:
+            return None
 
     def get_lanegroups_for_nextlink(self, next_link:int) -> list['LaneGroup']:
         if len(self.nextlink2mylgs)>0:
@@ -128,6 +99,5 @@ class Link:
         # add to joinlanegroup
         joinlg.add_vehicle(vehicle,dispatcher)
 
-
-    def get_total_vehicles(self) -> float:
+    def get_num_vehicles(self) -> float:
         return sum([lg.get_total_vehicles() for lg in self.lgs])

@@ -98,6 +98,10 @@ class AbstractController(ABC):
     def update_command(self, dispatcher) -> None:
         pass
 
+    @abstractmethod
+    def reset(self) -> None:
+        pass
+
     def __init__(self,id:int,jsoncntrl,acts:dict[int,AbstractActuator]):
         self.id = id
         self.actuators = acts

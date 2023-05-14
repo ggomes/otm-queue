@@ -8,8 +8,9 @@ from Signal import ActuatorSignal
 from Controller import ControllerStage
 from LaneGroup import LaneGroup
 import numpy as np
-from Events import Dispatcher, EventStopSimulation
+from Events import Dispatcher
 from Output import *
+import os
 if TYPE_CHECKING:
     from abstract import *
 
@@ -43,6 +44,7 @@ class Network:
     nodes: dict[int,Node]
     links: dict[int,"Link"]
     roadconn: dict[int,RoadConnection]
+    num_lgs: int
 
     def __init__(self,netjson:dict[str,dict]) -> None:
 
@@ -84,7 +86,6 @@ class Network:
                     link.is_sink = True
 
         # read road connections
-
         self.roadconn = dict()
         for strid, roadconnjson in netjson['roadconnections'].items():
 
@@ -106,15 +107,11 @@ class Network:
             self.roadconn[rc.id] = rc
 
         # Create lane groups .....................................
+        self.num_lgs = 0
         for link in self.links.values():
-
-            lanegroups = list()
 
             # collect outgoing road connections
             out_rcs = [rc for rc in self.roadconn.values() if rc.in_link==link.id]
-
-            # if len(out_rcs)==0 and (not link.is_sink):
-            #     raise(Exception("len(out_rcs)==0 and (not link.is_sink)"))
 
             # create set of all intersections of out_rcs up lanes
             lane_sets:set[tuple[int,int]] = set()
@@ -124,38 +121,36 @@ class Network:
                 else:
                     lane_sets.add(rc.in_link_lanes)
 
+            lanegroups = list()
             if len(lane_sets)==0:
                 lanegroups.append(LaneGroup(link=link,
                                             num_lanes=link.full_lanes,
                                             start_lane=1,
-                                            rp=link.roadparam,
-                                            out_rcs=None))
+                                            rp=link.roadparam))
+            else:
 
-                link.set_lanegroups(lanegroups)
-                continue
+                lane2rcs = list()
+                for start_lane in range(1,link.full_lanes+1):
+                    lane2rcs.append(frozenset(
+                        {rc.id for rc in out_rcs
+                         if (start_lane >= rc.in_link_lanes[0]) and
+                            (start_lane <= rc.in_link_lanes[1])}
+                    ))
 
-            lane2rcs = list()
-            for start_lane in range(1,link.full_lanes+1):
-                lane2rcs.append(frozenset(
-                    {rc.id for rc in out_rcs
-                     if (start_lane >= rc.in_link_lanes[0]) and
-                        (start_lane <= rc.in_link_lanes[1])}
-                ))
+                for myrcs in set(lane2rcs):
+                    lanes = [lanerc==myrcs for lanerc in lane2rcs]
+                    lanes_in_lg = np.where(lanes)[0] + 1
+                    lg_start_lane = lanes_in_lg[0]
+                    lg_num_lanes = lanes_in_lg.shape[0]
+                    lanegroup = LaneGroup(link=link,
+                                          num_lanes=lg_num_lanes,
+                                          start_lane=lg_start_lane,
+                                          rp=link.roadparam)
 
-            for myrcs in set(lane2rcs):
-                lanes = [lanerc==myrcs for lanerc in lane2rcs]
-                lanes_in_lg = np.where(lanes)[0] + 1
-                lg_start_lane = lanes_in_lg[0]
-                lg_num_lanes = lanes_in_lg.shape[0]
-                lanegroup = LaneGroup(link=link,
-                                      num_lanes=lg_num_lanes,
-                                      start_lane=lg_start_lane,
-                                      rp=link.roadparam,
-                                      out_rcs=[self.roadconn[rcid] for rcid in myrcs])
+                    lanegroups.append(lanegroup)
 
-                lanegroups.append(lanegroup)
-
-            link.set_lanegroups(lanegroups)
+            link.lgs = lanegroups
+            self.num_lgs += len(lanegroups)
 
 class Scenario:
     dispatcher : "Dispatcher"
@@ -181,7 +176,6 @@ class Scenario:
         with open(network_file) as f:
             jsonobj = json.load(f)
         self.network = Network(jsonobj)
-
 
         # make road connection to incoming lanegroup map
         rc2inlgs = dict()
@@ -225,7 +219,7 @@ class Scenario:
             if linkid not in self.demands.keys():
                 self.demands[linkid] = set()
             self.demands[linkid].add(demand)
-            demand.link.add_demand(demand)
+            demand.link.demands.append(demand)
 
         # read splits
         for x in jsonobj['splits']:
@@ -284,7 +278,6 @@ class Scenario:
 
         # build and attach dispatcher
         self.dispatcher = Dispatcher()
-        self.dispatcher.initialize()
 
         #  timed writer events
         for output in self.outputs:
@@ -303,15 +296,36 @@ class Scenario:
         # TODO Implement this
         return True
 
-    def get_lanegroups(self) -> None:
-        # TODO Implement this
-        pass
+    def get_lanegroup_ids(self) -> np.array:
+        lgs = np.empty((self.network.num_lgs,2),dtype=int)
+        c = 0
+        for link in self.network.links.values():
+            for lg in link.lgs:
+                lgs[c,:] = lg.get_id()
+                c += 1
+        return lgs
 
-    def set_state(self,state) -> None:
-        # TODO Implement this
-        pass
+    def reset(self) -> None:
+        self.dispatcher = Dispatcher()
+        for link in self.network.links.values():
+            for lg in link.lgs:
+                lg.clear()
+        for controller in self.controllers.values():
+            controller.reset()
 
-    def get_state(self) -> dict:
+    def set_vehicles(self,queue2vehicles) -> None:
+        # state is a 2D numpy array of integers.
+        # Each row contains the number of vehicles to assign to a queue in a lanegroup
+        # (link_id, start_lane, 0 for transit;1 for waiting, number of vehicles)
+        for i in range(queue2vehicles.shape[0]):
+            link = self.network.links[queue2vehicles[i,0]]
+            lg = link.get_lanegroup_for_startlane(queue2vehicles[i,1])
+            if queue2vehicles[i,2]==0:
+                lg.set_transit_vehicles(queue2vehicles[i,3])
+            else:
+                lg.set_waiting_vehicles(queue2vehicles[i,3])
+
+    def get_vehicles(self) -> dict:
         # TODO Implement this
         pass
 
@@ -319,15 +333,8 @@ class Scenario:
         # TODO Implement this
         pass
 
-    def run(self,duration):
-
-        # register stop the simulation
-        now = self.dispatcher.current_time
-        self.dispatcher.stop_time = now+duration
-        self.dispatcher.register_event(EventStopSimulation(self.dispatcher,now+duration,self))
-
-        # process all events
-        self.dispatcher.dispatch_all_events()
+    def advance(self, duration):
+        self.dispatcher.dispatch_to_time(self.dispatcher.current_time + duration)
 
     def close_outputs(self):
         for output in self.outputs:
