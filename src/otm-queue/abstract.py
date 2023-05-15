@@ -112,9 +112,6 @@ class AbstractController(ABC):
     def add_acuator(self,act:AbstractActuator):
         self.actuators[act.id] = act
 
-    def initialize(self,scenario) -> None:
-        self.poke(scenario.dispatcher, scenario.dispatcher.current_time)
-
     def poke(self,dispatcher, timestamp:float ) -> None:
 
         self.update_command(dispatcher)
@@ -148,7 +145,7 @@ class AbstractOutput(ABC):
         self.mytype = request['type']
         self.file = None
 
-    def initialize(self,dispatcher:'Dispatcher',folder_prefix:str) -> None:
+    def open_output_file(self, dispatcher: 'Dispatcher', folder_prefix:str) -> None:
         self.file = open(f"{folder_prefix}_{self.get_name()}.csv", 'w')
         self.file.write(self.get_header()+'\n')
 
@@ -162,8 +159,8 @@ class AbstractOutputTimed(AbstractOutput, ABC):
         super().__init__(scenario,request)
         self.dt = float(request['dt'])
 
-    def initialize(self, dispatcher,folder_prefix) -> None:
-        super().initialize(dispatcher,folder_prefix)
+    def open_output_file(self, dispatcher, folder_prefix) -> None:
+        super().open_output_file(dispatcher, folder_prefix)
         dispatcher.register_event(EventPoke(dispatcher,
                                             dispatch_order=70,
                                             timestamp=0.0,

@@ -58,9 +58,6 @@ class ControllerStage(AbstractController):
             stage.cycle_starttime = relstarttime%self.cycle
             relstarttime += stage.duration
 
-    def initialize(self,scenario) -> None:
-        super().initialize(scenario)
-
     def reset(self) -> None:
         pass
 

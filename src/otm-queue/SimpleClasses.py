@@ -1,12 +1,6 @@
 from dataclasses import dataclass
 
 @dataclass
-class VehicleType:
-    id: int
-    name: str
-    pathfull: bool
-
-@dataclass
 class RoadConnection:
     id:int
     in_link:int

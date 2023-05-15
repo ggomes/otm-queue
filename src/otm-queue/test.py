@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from core import Scenario
 import os
 import pandas as pd
-import numpy as np
+import json
 
 class MyTestCase(unittest.TestCase):
 
@@ -11,7 +11,6 @@ class MyTestCase(unittest.TestCase):
 
         scenario = Scenario(
             network_file = '../../cfg/intersection_network.json',
-            demand_file = '../../cfg/intersection_demand.json',
             control_file = '../../cfg/intersection_control.json',
             output_requests = [
                 { 'type':'link_flw', 'dt':'1','links':'1,2,3,4,5,6,7,8' },
@@ -23,20 +22,40 @@ class MyTestCase(unittest.TestCase):
             ],
             output_folder = '../../output',
             prefix = 'run1',
-            check=True
+            check=True,
+            random_seed=24724
         )
 
         lg_ids = scenario.get_lanegroup_ids()
 
-        scenario.reset()
+        lg2nextlinks = scenario.get_lg2nextlinks()
 
-        scenario.set_vehicles()
+        # populate vehicles dict
+        vehicles = dict()
+        for lg in lg_ids:
+            linkid = lg[0]
+            startlane = lg[1]
+            nextlinkids = lg2nextlinks[lg]
+            if len(nextlinkids)==0:
+                vehicles[(linkid, startlane, 'w')] = 1
+                vehicles[(linkid, startlane, 't')] = 1
+            else:
+                for nextlinkid in nextlinkids:
+                    vehicles[(linkid, startlane, 'w', nextlinkid)] = 1
+                    vehicles[(linkid, startlane, 't', nextlinkid)] = 1
+
+        # load inputs
+        with open('../../cfg/intersection_input.json') as f:
+            inputs = json.load(f)
+
+        scenario.set_state_and_inputs(
+            demands = inputs['demands'],
+            splits = inputs['splits'],
+            vehicles = vehicles,
+            check = True
+        )
 
         scenario.advance(duration=1000)
-
-    def run_write_output(self) -> None:
-        pass
-
 
     def test_plot(self) -> None:
 

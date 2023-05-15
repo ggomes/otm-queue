@@ -1,13 +1,12 @@
 from typing import TYPE_CHECKING, Optional
 import numpy as np
-from Demand import Demand
 from SimpleClasses import RoadParams
 import random
 
 if TYPE_CHECKING:
     from Splits import SplitMatrixProfile
     from LaneGroup import LaneGroup
-    from core import Scenario, Node
+    from core import Node
     from Events import Dispatcher
     from Vehicle import Vehicle
 
@@ -19,8 +18,7 @@ class Link:
     startnode: 'Node'
     endnode: 'Node'
     roadparam: RoadParams
-    demands: list[Demand]
-    split_profile: dict[int, 'SplitMatrixProfile']
+    split_profile: Optional['SplitMatrixProfile']
     lgs: list['LaneGroup']
     is_source: bool
     is_sink: bool
@@ -40,29 +38,17 @@ class Link:
         self.roadparam = RoadParams(capacity = float(roadparam['capacity']),
                                     speed =  float(roadparam['speed']),
                                     jam_density =  float(roadparam['jam_density']) )
-        self.demands = list()
-        self.split_profile = dict()
+        self.split_profile = None
         self.lgs = list()
         self.is_source = False
         self.is_sink = False
         self.nextlink2mylgs = dict()
 
-    def initialize(self,scenario:'Scenario') -> None:
-
-        for lg in self.lgs:
-            lg.initialize(scenario)
-
-        for sp in self.split_profile.values():
-            sp.initialize(scenario.dispatcher)
-
-        for d in self.demands:
-            d.initialize(scenario.dispatcher)
-
-    def sample_next_link(self,vtid:int) -> Optional[int]:
+    def sample_next_link(self) -> Optional[int]:
         if self.is_sink:
             return None
-        if len(self.split_profile)>0:
-            return self.split_profile[vtid].sample_output_link()
+        if self.split_profile is not None:
+            return self.split_profile.sample_output_link()
         else:
             return random.choice(list(self.endnode.out_links.keys()))
 
@@ -88,7 +74,7 @@ class Link:
     def add_vehicle(self,vehicle:'Vehicle',dispatcher:'Dispatcher',joinlg:Optional['LaneGroup']=None):
 
         # sample its next link
-        next_link_id = self.sample_next_link(vehicle.vtype.id)
+        next_link_id = self.sample_next_link()
         vehicle.next_link_id = next_link_id
 
         # pick from among the eligible lane groups, unless joinlg is already given
@@ -97,7 +83,7 @@ class Link:
             joinlg = self.argmax_supply(candidate_lane_groups)
 
         # add to joinlanegroup
-        joinlg.add_vehicle(vehicle,dispatcher)
+        joinlg.add_vehicle_to_queue(vehicle,'t', dispatcher)
 
     def get_num_vehicles(self) -> float:
         return sum([lg.get_total_vehicles() for lg in self.lgs])

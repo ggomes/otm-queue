@@ -3,19 +3,16 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from LaneGroup import VehicleQueue
-    from SimpleClasses import VehicleType
 
 class Vehicle:
 
     id:int
-    vtype:'VehicleType'
     next_link_id:int
     my_queue:'VehicleQueue'
     lg:'LaneGroup'
 
-    def __init__(self, vtype:'VehicleType') -> None :
+    def __init__(self) -> None :
         self.id = get_vehicle_id()
-        self.vtype = vtype
         self.next_link_id = -1
         self.my_queue = None
         self.lg = None

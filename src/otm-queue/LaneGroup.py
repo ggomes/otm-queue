@@ -1,12 +1,12 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from Events import EventSeviceLanegroupWaitingQueue, EventTransitToWaiting
 from collections import deque
 from static import get_service_period
 import numpy as np
+from Vehicle import Vehicle
 
 if TYPE_CHECKING:
     from core import Link
-    from Vehicle import Vehicle
     from SimpleClasses import RoadParams
     from Events import Dispatcher
 
@@ -44,7 +44,7 @@ class LaneGroup:
     saturation_flow_rate_vps : float
     nom_saturation_flow_rate_vps : float
     longitudinal_supply: float       # [veh]
-    nextlink2nextlgs:dict
+    nextlinks:list['Link']
 
     actuator : bool
     transit_queue: VehicleQueue
@@ -56,17 +56,20 @@ class LaneGroup:
         self.num_lanes = num_lanes
         self.start_lane = start_lane
 
-        self.max_vehicles = rp.jam_density * (link.length/1000.0) * self.num_lanes
+        if link.is_source:
+            self.max_vehicles = float('inf')
+        else:
+            self.max_vehicles = rp.jam_density * (link.length/1000.0) * self.num_lanes
         self.transit_time_sec = (link.length/rp.speed)* 3.6 # [m]/[kph] -> [sec]
         self.saturation_flow_rate_vps = rp.capacity*self.num_lanes/3600
         self.nom_saturation_flow_rate_vps = self.saturation_flow_rate_vps
         self.longitudinal_supply = 0.0
 
-        self.nextlink2nextlgs = dict()
-
         self.has_actuator = False
         self.transit_queue = VehicleQueue('transit')
         self.waiting_queue = VehicleQueue('waiting')
+
+        self.update_long_supply()
 
     def get_id(self):
         return self.link.id, self.start_lane
@@ -76,38 +79,20 @@ class LaneGroup:
             raise(Exception("Lanegroup is assigned multiple actuators"))
         self.has_actuator = True
 
-    def initialize(self,scenario) -> None:
-
-        self.transit_queue.clear()
-        self.waiting_queue.clear()
-
-        # register first vehicle exit
-        self.schedule_service_waiting_queue(scenario.dispatcher)
-
-        self.update_long_supply()
-
     def clear(self) -> None:
         self.transit_queue.clear()
         self.waiting_queue.clear()
 
-    def set_transit_vehicles(self,num_veh:int) -> None:
-        if num_veh>self.max_vehicles:
-            raise(Exception("Setting more than the maximum number of vehicles"))
-        # TODO FINISH THIS
-        # Generate num_veh vehicles.
-        # Sample next link, etc.
-        # put them into the transit queue
-
-    def set_waiting_vehicles(self, num_veh: int) -> None:
-        if num_veh > self.max_vehicles:
-            raise (Exception("Setting more than the maximum number of vehicles"))
-        # TODO FINISH THIS
-        # Generate num_veh vehicles.
-        # Sample next link, etc.
-        # put them into the waiting queue
-
     def update_long_supply(self) -> None:
         self.longitudinal_supply =  self.max_vehicles - self.get_total_vehicles()
+
+    def set_vehicles(self,vehs:int,queue:str,nextlinkid:int,dispatcher:'Dispatcher'):
+        if vehs>self.longitudinal_supply:
+            raise(Exception("Setting too many vehicles"))
+        for i in range(vehs):
+            vehicle = Vehicle()
+            vehicle.next_link_id = nextlinkid
+            self.add_vehicle_to_queue(vehicle, queue, dispatcher)
 
     def get_total_vehicles(self) -> float:
         return self.transit_queue.get_total_vehicles() + self.transit_queue.get_total_vehicles()
@@ -134,14 +119,22 @@ class LaneGroup:
         next_release = now + get_service_period(self.saturation_flow_rate_vps)
         dispatcher.register_event(EventSeviceLanegroupWaitingQueue(dispatcher,next_release,self))
 
-    def add_vehicle(self, veh:'Vehicle',dispatcher:'Dispatcher') -> None:
+    def add_vehicle_to_queue(self, veh: 'Vehicle', queuestr: str, dispatcher: Optional['Dispatcher']=None) -> None:
+
+        if queuestr=='t':
+            queue = self.transit_queue
+        elif queuestr=='w':
+            queue = self.waiting_queue
+        else:
+            queue = None
 
         # tell the vehicle it has moved
-        veh.move_to_queue(self,self.transit_queue)
+        veh.move_to_queue(self,queue)
 
         # dispatch to go to waiting queue
-        now = dispatcher.current_time
-        dispatcher.register_event(EventTransitToWaiting(dispatcher,now + self.transit_time_sec,veh))
+        if queue is self.transit_queue:
+            now = dispatcher.current_time
+            dispatcher.register_event(EventTransitToWaiting(dispatcher,now + self.transit_time_sec,veh))
 
         self.update_long_supply()
 

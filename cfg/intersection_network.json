@@ -9,11 +9,7 @@
     "5" : {"x":null,"y":null},
     "6" : {"x":null,"y":null},
     "7" : {"x":null,"y":null},
-    "8" : {"x":null,"y":null},
-    "22" : {"x":null,"y":null},
-    "44" : {"x":null,"y":null},
-    "66" : {"x":null,"y":null},
-    "88" : {"x":null,"y":null}
+    "8" : {"x":null,"y":null}
   },
 
   "links": {
@@ -24,11 +20,7 @@
     "5": { "full_lanes":"3", "length":"100", "start":"0", "end":"5", "roadparam":"1"},
     "6": { "full_lanes":"3", "length":"100", "start":"6", "end":"0", "roadparam":"1"},
     "7": { "full_lanes":"3", "length":"100", "start":"0", "end":"7", "roadparam":"1"},
-    "8": { "full_lanes":"3", "length":"100", "start":"8", "end":"0", "roadparam":"1"},
-    "22": { "full_lanes":"3", "length":"10", "start":"22", "end":"2", "roadparam":"1"},
-    "44": { "full_lanes":"3", "length":"10", "start":"44", "end":"4", "roadparam":"1"},
-    "66": { "full_lanes":"3", "length":"10", "start":"66", "end":"6", "roadparam":"1"},
-    "88": { "full_lanes":"3", "length":"10", "start":"88", "end":"8", "roadparam":"1"}
+    "8": { "full_lanes":"3", "length":"100", "start":"8", "end":"0", "roadparam":"1"}
   },
 
   "roadparams" : {
@@ -37,7 +29,7 @@
 
   "roadconnections" : {
     "25": { "in_link":"2", "in_link_lanes":"2-3", "out_link":"5" },
-    "27": { "in_link":"2", "in_link_lanes":"1-2", "out_link":"7" },
+    "27": { "in_link":"2", "in_link_lanes":"1-1", "out_link":"7" },
 
     "41": { "in_link":"4", "out_link":"1" },
     "45": { "in_link":"4", "out_link":"5" },

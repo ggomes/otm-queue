@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, Optional
 import json
-from SimpleClasses import VehicleType, RoadConnection
+from SimpleClasses import RoadConnection
 from Link import Link
 from Demand import Demand
 from Splits import SplitMatrixProfile
@@ -8,7 +8,7 @@ from Signal import ActuatorSignal
 from Controller import ControllerStage
 from LaneGroup import LaneGroup
 import numpy as np
-from Events import Dispatcher
+from Events import Dispatcher, EventDemandChange, EventSplitChange
 from Output import *
 import os
 if TYPE_CHECKING:
@@ -155,22 +155,24 @@ class Network:
 class Scenario:
     dispatcher : "Dispatcher"
     network : Network
-    vtypes : dict[int, "VehicleType"]
     controllers : dict[int,"AbstractController"]
     actuators : dict[int,"AbstractActuator"]       # TODO WHY?
-    demands : dict[int,set["Demand"]]              # TODO WHY?
+    demands : dict[int,'Demand']
     outputs : list['AbstractOutput']
     folder_prefix : str
 
     def __init__(self,
                  network_file:str,
-                 demand_file:str,
                  control_file:str,
                  output_requests: Optional[list[dict[str, str]]] = None,
                  output_folder: Optional[str] = None,
                  prefix: Optional[str] = None,
-                 check: Optional[bool] = False
+                 check: Optional[bool] = False,
+                 random_seed: Optional[int] = None
     ) -> None:
+
+        if random_seed is not None:
+            np.random.seed(random_seed)
 
         # read network
         with open(network_file) as f:
@@ -197,38 +199,6 @@ class Scenario:
                 else:
                     for rc in exiting_rcs:
                         link.nextlink2mylgs[rc.out_link]  = rc2inlgs[rc.id]
-
-        with open(demand_file) as f:
-            jsonobj = json.load(f)
-
-        # read vehicle types
-        self.vtypes = dict()
-        for key, val in jsonobj['vehicletypes'].items():
-            vtid:int = int(key)
-            self.vtypes[vtid] = VehicleType(
-                id=vtid,
-                name=val['name'],
-                pathfull=bool(val['pathfull'])
-            )
-
-        # read demands
-        self.demands = dict()
-        for x in jsonobj['demands']:
-            demand:Demand = Demand(x,self)
-            linkid = demand.link.id
-            if linkid not in self.demands.keys():
-                self.demands[linkid] = set()
-            self.demands[linkid].add(demand)
-            demand.link.demands.append(demand)
-
-        # read splits
-        for x in jsonobj['splits']:
-            split = SplitMatrixProfile(x,self)
-            linkin:Link = split.linkin
-            if split.vtype.id in linkin.split_profile.keys():
-                raise(Exception("Reapeated splits for link"))
-            else:
-                linkin.split_profile[split.vtype.id] = split
 
         with open(control_file) as f:
             jsonobj = json.load(f)
@@ -279,31 +249,92 @@ class Scenario:
         # build and attach dispatcher
         self.dispatcher = Dispatcher()
 
-        #  timed writer events
+        # open output files
         for output in self.outputs:
-            output.initialize(self.dispatcher,self.folder_prefix)
+            output.open_output_file(self.dispatcher, self.folder_prefix)
 
+        # initialize the links
+        # TODO MOVE THIS ELSEWHERE
         for link in self.network.links.values():
-            link.initialize(self)
+            for lg in link.lgs:
+                lg.schedule_service_waiting_queue(self.dispatcher)
 
+        # initialize the controllers
+        # TODO MOVE THIS ELSEWHERE
         for cnt in self.controllers.values():
-            cnt.initialize(self)
+            cnt.poke(self.dispatcher, self.dispatcher.current_time)
 
         if check:
             self.check()
+
+    def set_state_and_inputs(self,
+                             demands:Optional[dict]=None,
+                             splits:Optional[dict]=None,
+                             vehicles:Optional[dict]=None,
+                             check:Optional[bool] = False) -> None:
+
+
+        now = self.dispatcher.current_time
+
+        if vehicles is not None:
+            for queueid, vehs in vehicles.items():
+                linkid = queueid[0]
+                lane = queueid[1]
+                link = self.network.links[linkid]
+                lg = link.get_lanegroup_for_startlane(lane)
+                queue = queueid[2]
+                if len(queueid)>3:
+                    nextlinkid = queueid[3]
+                elif len(link.endnode.out_links)==1:
+                    nextlinkid = link.endnode.out_links.values()
+                    nextlinkid = nextlinkid[0]
+                elif link.is_sink:
+                    nextlinkid = None
+                else:
+                    raise(Exception("n398-5g"))
+                lg.set_vehicles(vehs,queue,nextlinkid,self.dispatcher)
+
+        # demands
+        if demands is not None:
+            self.demands = dict()
+            for x in demands:
+                demand:Demand = Demand(x,self)
+                linkid = demand.link.id
+                self.demands[linkid] = demand
+                self.dispatcher.register_event(
+                    EventDemandChange(self.dispatcher, now, demand, demand.profile[0]))
+                # TODO IS 0 ABOVE CORRECT?
+
+        # splits
+        if splits is not None:
+            for x in splits:
+                spm = SplitMatrixProfile(x,self)
+                spm.linkin.split_profile = spm
+                self.dispatcher.register_event(
+                    EventSplitChange(self.dispatcher, now, spm,
+                                     spm.profile.get_value_for_time(now)))
+
 
     def check(self) -> bool:
         # TODO Implement this
         return True
 
     def get_lanegroup_ids(self) -> np.array:
-        lgs = np.empty((self.network.num_lgs,2),dtype=int)
-        c = 0
+        lgs = list()
         for link in self.network.links.values():
             for lg in link.lgs:
-                lgs[c,:] = lg.get_id()
-                c += 1
+                lgs.append( lg.get_id() )
         return lgs
+
+    def get_lg2nextlinks(self) -> dict:
+        lg2nextlinks = dict()
+        for link in self.network.links.values():
+            for lg in link.lgs:
+                lg2nextlinks[lg.get_id()] = set()
+            for linkid, lgs in link.nextlink2mylgs.items():
+                for lg in lgs:
+                    lg2nextlinks[lg.get_id()].add(linkid)
+        return lg2nextlinks
 
     def reset(self) -> None:
         self.dispatcher = Dispatcher()

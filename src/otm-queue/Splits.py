@@ -1,8 +1,8 @@
-from dataclasses import dataclass
+# from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 from Events import Dispatcher, EventSplitChange
 from Link import Link
-from SimpleClasses import VehicleType
+# from SimpleClasses import VehicleType
 import numpy as np
 
 if TYPE_CHECKING:
@@ -53,7 +53,6 @@ class Profile2D:
 class SplitMatrixProfile:
 
     linkin: Link
-    vtype: VehicleType
     dt: Optional[float]
     profile: Profile2D    # link out id -> split profile
 
@@ -62,16 +61,10 @@ class SplitMatrixProfile:
 
     def __init__(self,splitjson:dict[str,str],scenario:'Scenario') -> None:
         linkinid = int(splitjson['link_in'])
-        vtypeid = int(splitjson['vtype'])
         self.dt = float(splitjson['dt']) if 'dt' in splitjson.keys() else None
         self.linkin = scenario.network.links[linkinid]
-        self.vtype = scenario.vtypes[vtypeid]
         # noinspection PyTypeChecker
         self.profile = Profile2D(splitjson['link_out_value'],self.dt)
-
-    def initialize(self,dispatcher: Dispatcher) -> None :
-        dispatcher.register_event(EventSplitChange(dispatcher,
-                             0, self, self.profile.get_value_for_time(0)))
 
     def set_all_current_splits(self, newsplit:Link2Split) -> None:
         self.outlink2split = newsplit
@@ -96,4 +89,4 @@ class SplitMatrixProfile:
             dispatcher.register_event(EventSplitChange(dispatcher,time, self, splitvalue))
 
     def __str__(self) -> str:
-        return "split vtid={}, link={}".format(self.vtype.id, self.linkin.id)
+        return "link={}".format(self.linkin.id)
