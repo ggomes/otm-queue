@@ -162,13 +162,13 @@ class Scenario:
     folder_prefix : str
 
     def __init__(self,
-                 network_file:str,
-                 control_file:str,
-                 output_requests: Optional[list[dict[str, str]]] = None,
-                 output_folder: Optional[str] = None,
-                 prefix: Optional[str] = None,
-                 check: Optional[bool] = False,
-                 random_seed: Optional[int] = None
+         network_file:str,
+         control_file:str,
+         output_requests: Optional[list[dict[str, str]]] = None,
+         output_folder: Optional[str] = None,
+         prefix: Optional[str] = None,
+         check: Optional[bool] = False,
+         random_seed: Optional[int] = None
     ) -> None:
 
         if random_seed is not None:
@@ -238,9 +238,7 @@ class Scenario:
                     output = OutputLanegroupFlow(self,request)
                 elif mytype=='lg_veh':
                     output = OutputLanegroupVeh(self,request)
-                elif mytype=='veh_events':
-                    output = OutputVehicleEvents(self,request)
-                elif mytype=='cnt_events':
+                elif mytype=='ctrl':
                     output = OutputControllerEvents(self,request)
                 else:
                     raise(Exception("Unknown output type"))
@@ -252,17 +250,6 @@ class Scenario:
         # open output files
         for output in self.outputs:
             output.open_output_file(self.dispatcher, self.folder_prefix)
-
-        # initialize the links
-        # TODO MOVE THIS ELSEWHERE
-        for link in self.network.links.values():
-            for lg in link.lgs:
-                lg.schedule_service_waiting_queue(self.dispatcher)
-
-        # initialize the controllers
-        # TODO MOVE THIS ELSEWHERE
-        for cnt in self.controllers.values():
-            cnt.poke(self.dispatcher, self.dispatcher.current_time)
 
         if check:
             self.check()
@@ -319,9 +306,13 @@ class Scenario:
         # TODO Implement this
         return True
 
-    def get_lanegroup_ids(self) -> np.array:
+    def get_lanegroup_ids(self,linkids:Optional[list]=None) -> list:
+        if linkids is None:
+            links = self.network.links.values()
+        else:
+            links = [self.network.links[linkid] for linkid in linkids]
         lgs = list()
-        for link in self.network.links.values():
+        for link in links:
             for lg in link.lgs:
                 lgs.append( lg.get_id() )
         return lgs
@@ -365,7 +356,18 @@ class Scenario:
         pass
 
     def advance(self, duration):
-        self.dispatcher.dispatch_to_time(self.dispatcher.current_time + duration)
+
+        # initialize the links
+        for link in self.network.links.values():
+            for lg in link.lgs:
+                lg.schedule_service_waiting_queue(self.dispatcher)
+
+        # initialize the controllers
+        for cnt in self.controllers.values():
+            cnt.poke(self.dispatcher, self.dispatcher.current_time)
+
+        # dispatch all events
+        self.dispatcher.advance(duration)
 
     def close_outputs(self):
         for output in self.outputs:

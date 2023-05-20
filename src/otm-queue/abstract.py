@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING,Optional, Any
 if TYPE_CHECKING:
     from core import Scenario
     from Events import Dispatcher
+    from Output import OutputControllerEvents
 
 class AbstractEvent(ABC):
     timestamp: float
@@ -93,14 +94,17 @@ class AbstractController(ABC):
     actuators:dict[int,AbstractActuator]
     command:dict[int, Optional[AbstractCommand]] # actuator id -> command
     dt:Optional[float]
+    event_writer:Optional['OutputControllerEvents']
 
     @abstractmethod
-    def update_command(self, dispatcher) -> None:
-        pass
+    def update_command(self, dispatcher) -> None: pass
 
     @abstractmethod
-    def reset(self) -> None:
-        pass
+    def reset(self) -> None: pass
+
+    def write_event(self,timestamp:float,val:str) -> None:
+        if self.event_writer is not None:
+            self.event_writer.file.write('{},{},{}\n'.format(timestamp,self.id,val))
 
     def __init__(self,id:int,jsoncntrl,acts:dict[int,AbstractActuator]):
         self.id = id
@@ -108,9 +112,14 @@ class AbstractController(ABC):
         self.command = dict()
         self.dt = None if 'dt' not in jsoncntrl.keys() else float(jsoncntrl['dt'])
         self.type = jsoncntrl['type']
+        self.event_writer = None
 
     def add_acuator(self,act:AbstractActuator):
         self.actuators[act.id] = act
+
+    def register_event_writer(self,x:'OutputControllerEvents') -> None:
+        if self.event_writer is None:
+            self.event_writer = x
 
     def poke(self,dispatcher, timestamp:float ) -> None:
 
@@ -137,9 +146,6 @@ class AbstractOutput(ABC):
     @abstractmethod
     def get_header(self) -> str: pass
 
-    @abstractmethod
-    def get_str(self) -> str: pass
-
     def __init__(self,scenario:'Scenario',request:dict[str,str]) -> None:
         self.scenario = scenario
         self.mytype = request['type']
@@ -154,6 +160,9 @@ class AbstractOutput(ABC):
 
 class AbstractOutputTimed(AbstractOutput, ABC):
     dt:float
+
+    @abstractmethod
+    def get_str(self) -> str: pass
 
     def __init__(self,scenario:'Scenario',request:dict[str,str]) -> None:
         super().__init__(scenario,request)

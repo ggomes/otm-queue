@@ -87,12 +87,6 @@ class Dispatcher:
         self.events = list()
         self.current_time = 0.0
 
-    def stop(self) -> None:
-        self.clear_events()
-
-    def clear_events(self) -> None:
-        self.events = list()
-
     def register_event(self,event:AbstractEvent) -> None:
         if event.timestamp<self.current_time:
             return
@@ -101,7 +95,8 @@ class Dispatcher:
     def remove_events_for_recipient(self,clazz,recipient) -> None:
         self.events = [e for e in self.events if (not isinstance(e[2],clazz)) or (e[2].recipient is not recipient)]
 
-    def dispatch_to_time(self,stop_time:float) -> None:
+    def advance(self,duration:float) -> None:
+        stop_time = self.current_time + duration
         while len(self.events)>0 and self.current_time<=stop_time:
             timestamp, dispatchorder, event = heapq.heappop(self.events)
             self.current_time = timestamp

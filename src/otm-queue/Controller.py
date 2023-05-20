@@ -7,7 +7,6 @@ if TYPE_CHECKING:
     from abstract import AbstractActuator
     from Signal import ActuatorSignal
 
-
 @dataclass
 class StageindexReltime:
     index:int
@@ -66,6 +65,7 @@ class ControllerStage(AbstractController):
         x = self.get_stage_for_time(now)   # StageindexReltime
 
         self.set_stage_index(x.index)
+        self.write_event(dispatcher.current_time,str(x.index))
 
         # register next poke
         next_stage_start = now - x.reltime + self.stages[x.index].duration

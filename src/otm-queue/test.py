@@ -13,12 +13,11 @@ class MyTestCase(unittest.TestCase):
             network_file = '../../cfg/intersection_network.json',
             control_file = '../../cfg/intersection_control.json',
             output_requests = [
-                { 'type':'link_flw', 'dt':'1','links':'1,2,3,4,5,6,7,8' },
+                { 'type':'link_flw', 'dt':'1' },
                 { 'type':'link_veh', 'dt':'1', 'links':'1,2,3,4,5,6,7,8' },
                 { 'type':'lg_flw', 'dt':'10', 'links':'1,2,3,4,5,6,7,8' },
-                { 'type':'lg_veh', 'dt':'10', 'links':'1,2,3,4,5,6,7,8' },
-                { 'type':'veh_events', 'links':'1,2,3,4,5,6,7,8' },
-                { 'type':'cnt_events', 'ids':'0' }
+                { 'type':'lg_veh', 'dt':'10' },
+                { 'type':'ctrl' }
             ],
             output_folder = '../../output',
             prefix = 'run1',
@@ -55,7 +54,10 @@ class MyTestCase(unittest.TestCase):
             check = True
         )
 
-        scenario.advance(duration=1000)
+        scenario.advance(duration=4000)
+
+        scenario.close_outputs()
+
 
     def test_plot(self) -> None:
 

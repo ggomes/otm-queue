@@ -87,3 +87,6 @@ class Link:
 
     def get_num_vehicles(self) -> float:
         return sum([lg.get_total_vehicles() for lg in self.lgs])
+
+    def exit_count(self) -> int:
+        return sum(lg.exit_count for lg in self.lgs)

@@ -30,7 +30,7 @@ class VehicleQueue:
     def remove_lead_vehicle(self) -> None:
         self.queue.popleft()
 
-    def get_lead_vehicle(self) -> 'Vehicle':
+    def peek_lead_vehicle(self) -> 'Vehicle':
         return self.queue[0]
 
 class LaneGroup:
@@ -44,6 +44,7 @@ class LaneGroup:
     saturation_flow_rate_vps : float
     nom_saturation_flow_rate_vps : float
     longitudinal_supply: float       # [veh]
+    exit_count:int                  # [veh]
     nextlinks:list['Link']
 
     actuator : bool
@@ -63,7 +64,8 @@ class LaneGroup:
         self.transit_time_sec = (link.length/rp.speed)* 3.6 # [m]/[kph] -> [sec]
         self.saturation_flow_rate_vps = rp.capacity*self.num_lanes/3600
         self.nom_saturation_flow_rate_vps = self.saturation_flow_rate_vps
-        self.longitudinal_supply = 0.0
+        self.longitudinal_supply = 0.
+        self.exit_count = 0
 
         self.has_actuator = False
         self.transit_queue = VehicleQueue('transit')
@@ -148,11 +150,11 @@ class LaneGroup:
             return
 
         # otherwise get the first vehicle
-        vehicle = self.waiting_queue.get_lead_vehicle()
+        vehicle = self.waiting_queue.peek_lead_vehicle()
 
+        # compute space in the next link
         nextlg = None
         nextlg_supply = float('inf')
-
         if not self.link.is_sink:
             next_link_id = vehicle.next_link_id
             if next_link_id in self.link.endnode.out_links.keys():
@@ -162,7 +164,11 @@ class LaneGroup:
                 nextlg = nextlgs[nextlg_ind]
                 nextlg_supply = nextlgs_supply[nextlg_ind]
 
+        # release the vehicle if there is space
         if nextlg_supply >= 1:
+
+            # increment exit counter
+            self.exit_count += 1
 
             # send vehicle to next link
             if not self.link.is_sink:
